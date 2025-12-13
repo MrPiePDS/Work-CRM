@@ -1,347 +1,313 @@
-Τέλειο, ξεκάθαρο 👍
----
+# Client Manager v1
 
-# 📄 README.md
-
-*(ένα αρχείο, μεγάλο, πρωτότυπο, επαγγελματικό)*
-
-Κάνε **copy–paste ΟΛΟ** το παρακάτω ως `README.md`.
-
-```md
-# Client Manager v1  
-### Local Office CRM – Design, Logic & Usage Documentation
+### Local Office CRM — Design, Architecture & Usage Documentation
 
 ---
 
-## SECTION 1 — USER GUIDE  
-### (For everyday users – no technical knowledge required)
+## Overview
+
+**Client Manager v1** is a **local-first desktop CRM application** designed for small offices that require **clarity, accountability, and reliability** without reliance on internet connectivity or cloud services.
+
+It replaces error-prone Excel workflows with:
+
+* structured data entry
+* automatic calculations
+* organized document management
+* full action traceability
+
+The system is intentionally simple, transparent, and maintainable.
 
 ---
 
-### 1. What is Client Manager?
+## SECTION 1 — USER GUIDE
 
-Client Manager is a **local desktop application** designed to help offices manage customers, services, and documents **without using the internet**.
-
-This application replaces chaotic Excel usage with:
-- clear forms
-- automatic calculations
-- organized customer folders
-- clear responsibility (who did what, and when)
-
-It is designed so that **anyone can use it**, even without computer experience.
+### (For everyday users — no technical knowledge required)
 
 ---
 
-### 2. Logging in
+### 1. Purpose of the Application
 
-When the application starts, you will see a login screen.
+Client Manager allows office staff to:
 
-- Each user logs in with their credentials
-- Every action is logged automatically
-- You always know:
-  - who created a customer
-  - who edited them
-  - who confirmed files
+* register customers quickly
+* manage services and payments
+* store and retrieve documents per customer
+* track actions and responsibilities
 
-This protects both the office and the employee.
+All operations are performed **offline**, on the local computer.
 
 ---
 
-### 3. Creating a new customer
+### 2. Login & Accountability
 
-Go to **New Customer** tab.
+Upon launch, users are presented with a login screen.
 
-Fill in:
-- Service type (KEP / Nomika)
-- Name & Surname
-- Phone number
-- Notes (optional)
+Each user:
 
-The date is filled automatically.
+* logs in with personal credentials
+* is automatically associated with every action they perform
 
-Before saving:
-- You MUST confirm:
-  - customer data
-  - selected services & pricing
+The system records:
 
-This prevents accidental mistakes.
+* customer creation
+* edits and updates
+* file confirmations
+
+This ensures **clear responsibility and internal protection**.
 
 ---
 
-### 4. Services & payments
+### 3. Creating a New Customer
 
-Select at least one service.
+Navigate to the **New Customer** tab and complete the required fields:
 
-The application will:
-- calculate total cost
-- calculate balance after payment
-- show remaining amount clearly
+* Service category (e.g. KEP / Legal)
+* Full name
+* Phone number
+* Optional notes
 
-No manual calculations.
-No Excel formulas.
-No errors.
+The date and customer ID are generated automatically.
 
----
-
-### 5. Customer files (Documents)
-
-After saving a customer:
-- A **folder is created automatically**
-- Folder name includes ID & customer name
-
-You can:
-- drag & drop files
-- move scanned files from a scanner folder
-- open files
-- print files
-- confirm files
-
-Everything stays **organized per customer**.
+Before saving, the user must **explicitly confirm** the entered data.
+This confirmation step exists to prevent accidental or incorrect entries.
 
 ---
 
-### 6. Search & customer history
+### 4. Services & Payments
 
-In the **Search** tab you can find customers by:
-- ID
-- Name
-- Phone number
+Each customer may be assigned one or more services.
 
-You can:
-- open customer details
-- see notes
-- see files
-- see full action history
+The application automatically:
 
----
+* calculates total cost
+* applies payments
+* displays remaining balance clearly
 
-### 7. Dashboard (Overview)
-
-The Dashboard shows:
-- all customers
-- balances
-- serving time
-- file status
-
-You can:
-- filter by ID / Name / Phone
-- sort by ID (ascending / descending)
-- export the dashboard to **PDF**
-- print clean, readable reports
+No manual calculations are required.
 
 ---
 
-### 8. Important notes
+### 5. Document Management
 
-- This app works **offline**
-- All data is stored **locally**
-- No cloud
-- No external servers
-- No subscriptions
+Once a customer is saved:
+
+* a dedicated folder is created automatically
+* the folder includes the customer ID and name
+
+Users can:
+
+* drag & drop files
+* move scanned documents
+* open and print files
+* confirm document completeness
+
+All documents remain **strictly organized per customer**.
 
 ---
 
+### 6. Search & Customer History
+
+The **Search** tab allows retrieval by:
+
+* customer ID
+* name
+* phone number
+
+From the results, users can:
+
+* open customer details
+* view notes
+* access documents
+* review full action history
+
 ---
 
-## SECTION 2 — TECHNICAL GUIDE  
+### 7. Dashboard & Reporting
+
+The Dashboard provides an overview of:
+
+* all customers
+* balances
+* service status
+* document confirmation state
+
+Available actions:
+
+* filtering by ID / Name / Phone
+* sorting results
+* exporting reports to PDF
+* printing clean summaries
+
+---
+
+### 8. Operating Principles
+
+* Fully offline operation
+* Local data storage only
+* No cloud services
+* No subscriptions
+* No external dependencies
+
+---
+
+## SECTION 2 — TECHNICAL DOCUMENTATION
+
 ### (For developers, IT staff, and maintainers)
 
 ---
 
-### 1. Architecture philosophy
+### 1. Design Philosophy
 
-This project is intentionally:
-- **local-first**
-- **single-file**
-- **easy to audit**
-- **easy to maintain**
+Client Manager is intentionally designed to be:
 
-There is no server.
-There is no database engine.
-Excel is used as a lightweight datastore.
+* local-first
+* single-instance
+* easy to audit
+* easy to maintain
 
----
+There is:
 
-### 2. Technologies used
-
-- **Python 3**
-- **PySide6 (Qt)** for GUI
-- **openpyxl** for Excel read/write
-- Built-in libraries:
-  - pathlib
-  - json
-  - csv
-  - hashlib
-  - datetime
+* no server
+* no background services
+* no external database engine
 
 ---
 
-### 3. File structure at runtime
+### 2. Technology Stack
 
-On first run, the app creates:
+* Python 3
+* PySide6 (Qt) — graphical interface
+* openpyxl — Excel read/write
+
+Standard libraries:
+
+* pathlib
+* json
+* csv
+* hashlib
+* datetime
+
+---
+
+### 3. Runtime File Structure
+
+On first launch, the application initializes the following structure:
 
 ```
-
 %APPDATA%/ClientManagerV1/
 │
-├─ clients.xlsx        ← main datastore
-├─ users.json          ← credentials & settings
-├─ audit_log.csv       ← full history
+├─ clients.xlsx        # Primary datastore
+├─ users.json          # User credentials & settings
+├─ audit_log.csv       # Complete action history
 └─ clients/
-├─ 1 - John Doe/
-├─ 2 - Maria Papas/
-└─ ...
+   ├─ 1 - John Doe/
+   ├─ 2 - Maria Papas/
+   └─ ...
+```
 
-````
-
-This structure is **self-healing** and auto-created.
+The structure is auto-created and self-healing.
 
 ---
 
-### 4. Excel as datastore
+### 4. Excel as Datastore
 
-- One row = one customer
-- ID is reused using the **smallest available ID**
-- No gaps unless rows are intentionally removed
-- Headers auto-migrate on version changes
+Excel is intentionally used as a lightweight datastore:
+
+* One row per customer
+* IDs assigned using the smallest available number
+* Controlled access through the application only
+* Automatic header migration between versions
 
 This avoids:
-- SQL complexity
-- external dependencies
-- corruption risk from concurrent editing
+
+* SQL complexity
+* additional dependencies
+* concurrency corruption
 
 ---
 
-### 5. Security model
+### 5. Security Model
 
-- Passwords are hashed (SHA-256)
-- No plaintext passwords
-- Audit log records:
-  - logins
-  - edits
-  - file operations
-  - confirmations
+* Passwords stored as SHA-256 hashes
+* No plaintext credentials
+* Full audit logging of:
 
-This is NOT enterprise security.
-It is **office-level accountability**.
+  * logins
+  * edits
+  * file operations
+  * confirmations
+
+This model provides **office-level accountability**, not enterprise security.
 
 ---
 
-### 6. Building the executable
+### 6. Building the Executable
 
-To build a Windows `.exe`:
+To generate a standalone Windows executable:
 
 ```bash
 python -m PyInstaller --noconsole --onefile main.py
-````
+```
 
-Result:
+Output:
 
 ```
 dist/main.exe
 ```
 
-This exe:
+The executable includes:
 
-* contains Python
-* contains all dependencies
-* runs standalone
+* Python runtime
+* all dependencies
+* no external requirements
 
 ---
 
-### 7. About decompilation
+### 7. Transparency & Decompilation
 
-This project is **not obfuscated**.
+The application is **not obfuscated by design**.
 
 Reasons:
 
 * transparency
-* auditability
-* maintainability
+* long-term maintainability
+* ease of extension
 
-Anyone with Python knowledge can:
-
-* inspect logic
-* modify UI
-* extend features
-
-This is intentional.
+The source is meant to be readable and adaptable.
 
 ---
 
-### 8. Extending the system
+### 8. Extension Possibilities
 
-Easy extension points:
+The architecture allows future expansion:
 
-* Replace Excel with SQLite
-* Add user roles
-* Add cloud sync
-* Add automatic backups
-* Add multi-office support
-
-The architecture supports this.
-
----
+* migration to SQLite
+* role-based permissions
+* cloud synchronization
+* automated backups
+* multi-office support
 
 ---
 
 ## SECTION 3 — LICENSE
 
-This project is released under a **custom license**.
+This project is released under a **custom internal-use license**.
 
-You are allowed to:
+Permitted:
 
-* use it
-* modify it
-* deploy it internally
+* internal use
+* modification
+* deployment within an organization
 
-You are NOT allowed to:
+Not permitted:
 
-* resell it as-is
-* remove author attribution
+* resale
+* sublicensing
+* removal of author attribution
 
-See the `LICENSE` file for full terms.
+Refer to the `LICENSE` file for full terms.
 
 ---
 
-© Author: [YOUR NAME / BRAND]
+© 2025 — Author: [YOUR NAME / BRAND]
 All rights reserved.
-
-````
-
----
-
-# 📜 LICENSE file  
-*(ξεχωριστό αρχείο: `LICENSE`)*
-
-Δημιούργησε αρχείο `LICENSE` και βάλε **ΑΥΤΟ ΑΚΡΙΒΩΣ**:
-
-```text
-Custom Software License
-
-Copyright (c) 2025 [YOUR NAME]
-
-Permission is hereby granted to use, copy, and modify this software
-for personal or internal business use.
-
-The following conditions apply:
-
-1. This software may NOT be sold, sublicensed, or redistributed
-   as a commercial product, either in original or modified form.
-
-2. The author attribution must remain visible in the source code
-   and documentation.
-
-3. This software is provided "AS IS", without warranty of any kind,
-   express or implied, including but not limited to the warranties
-   of merchantability or fitness for a particular purpose.
-
-4. The author shall not be liable for any damages arising from
-   the use of this software.
-
-This license applies to all files in this repository.
-
-All rights reserved.
-````
-
----
