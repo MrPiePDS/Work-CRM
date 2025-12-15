@@ -309,5 +309,6 @@ Refer to the `LICENSE` file for full terms.
 
 ---
 
-© 2025 — Author: [YOUR NAME / BRAND]
+© 2025 — Author: [PanosPDS/CRM]
 All rights reserved.
+
