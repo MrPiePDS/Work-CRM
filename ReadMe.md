@@ -1,314 +1,306 @@
+Έγινε. Παρακάτω είναι **το ίδιο ενιαίο README**, αλλά:
+
+* ❌ **χωρίς emoji**
+* ✔ με **επαγγελματικό, ουδέτερο ύφος**
+* ✔ κατάλληλο για **παράδοση σε εταιρεία**, **συνοδευτικό EXE** ή **εσωτερική τεκμηρίωση**
+* ✔ καθαρός διαχωρισμός **Χρήστη / Developer** χωρίς “marketing” γλώσσα
+
+👉 Μπορείς να το χρησιμοποιήσεις **ως έχει** (`README.md`).
+
+---
+
+```md
 # Client Manager v1
 
-### Local Office CRM — Design, Architecture & Usage Documentation
+Το παρόν αρχείο περιέχει:
+- Οδηγίες χρήσης για τελικούς χρήστες
+- Τεχνική τεκμηρίωση για developers / συντηρητές του έργου
+
+Αν είστε:
+- **Χρήστης**, διαβάστε το section: ΟΔΗΓΙΕΣ ΧΡΗΣΗΣ
+- **Developer**, διαβάστε το section: ΤΕΧΝΙΚΑ / DEVELOPER NOTES
 
 ---
 
-## Overview
+## Περιγραφή Εφαρμογής
 
-**Client Manager v1** is a **local-first desktop CRM application** designed for small offices that require **clarity, accountability, and reliability** without reliance on internet connectivity or cloud services.
+Το **Client Manager v1** είναι μια desktop εφαρμογή για Windows, σχεδιασμένη για βασική διαχείριση πελατών σε περιβάλλον γραφείου.
 
-It replaces error-prone Excel workflows with:
+Βασικές δυνατότητες:
+- Καταχώρηση και αναζήτηση πελατών
+- Αυτόματη δημιουργία φακέλων πελατών
+- Διαχείριση αρχείων (επισύναψη, άνοιγμα, εκτύπωση)
+- Καρτέλα πελάτη με ιστορικό ενεργειών
+- Dashboard με φίλτρα
+- Εξαγωγή δεδομένων σε PDF
+- Καταγραφή ενεργειών (audit log)
 
-* structured data entry
-* automatic calculations
-* organized document management
-* full action traceability
-
-The system is intentionally simple, transparent, and maintainable.
-
----
-
-## SECTION 1 — USER GUIDE
-
-### (For everyday users — no technical knowledge required)
+Η εφαρμογή λειτουργεί πλήρως **offline**.
 
 ---
 
-### 1. Purpose of the Application
+# ΟΔΗΓΙΕΣ ΧΡΗΣΗΣ (Για Χρήστες)
 
-Client Manager allows office staff to:
-
-* register customers quickly
-* manage services and payments
-* store and retrieve documents per customer
-* track actions and responsibilities
-
-All operations are performed **offline**, on the local computer.
+## 1. Σύνδεση
+- Εκκινήστε την εφαρμογή
+- Εισάγετε όνομα χρήστη και κωδικό
+- Προεπιλεγμένος λογαριασμός: `admin / 1234`
+- Συνιστάται αλλαγή κωδικού μετά την πρώτη σύνδεση
 
 ---
 
-### 2. Login & Accountability
+## 2. Νέος Πελάτης
 
-Upon launch, users are presented with a login screen.
+### 2.1 Ρίζα φακέλων πελατών
+Πριν την πρώτη καταχώρηση:
+1. Ορίστε τη ρίζα φακέλων πελατών (π.χ. `D:\Clients`)
+2. Πατήστε «Αποθήκευση ρίζας»
 
-Each user:
-
-* logs in with personal credentials
-* is automatically associated with every action they perform
-
-The system records:
-
-* customer creation
-* edits and updates
-* file confirmations
-
-This ensures **clear responsibility and internal protection**.
+Όλοι οι φάκελοι πελατών θα δημιουργούνται εντός αυτής της διαδρομής.
 
 ---
 
-### 3. Creating a New Customer
+### 2.2 Στοιχεία πελάτη
+Υποχρεωτικό:
+- Ονοματεπώνυμο
 
-Navigate to the **New Customer** tab and complete the required fields:
+Προαιρετικά:
+- Τηλέφωνο
+- ΑΦΜ (9 ψηφία)
+- ΑΜΚΑ (11 ψηφία)
+- ΑΜΑ
 
-* Service category (e.g. KEP / Legal)
-* Full name
-* Phone number
-* Optional notes
-
-The date and customer ID are generated automatically.
-
-Before saving, the user must **explicitly confirm** the entered data.
-This confirmation step exists to prevent accidental or incorrect entries.
+Η εφαρμογή ελέγχει αυτόματα τα μήκη των αριθμητικών πεδίων.
 
 ---
 
-### 4. Services & Payments
-
-Each customer may be assigned one or more services.
-
-The application automatically:
-
-* calculates total cost
-* applies payments
-* displays remaining balance clearly
-
-No manual calculations are required.
+### 2.3 Taxisnet
+Αν ο πελάτης διαθέτει Taxisnet:
+- Επιλέξτε «Ναι»
+- Συμπληρώστε username και password
 
 ---
 
-### 5. Document Management
+### 2.4 Υποχρεωτικές επιβεβαιώσεις
+Πριν την αποθήκευση απαιτείται:
+- Επιβεβαίωση στοιχείων πελάτη
+- Επιβεβαίωση υπηρεσιών και τιμών
 
-Once a customer is saved:
-
-* a dedicated folder is created automatically
-* the folder includes the customer ID and name
-
-Users can:
-
-* drag & drop files
-* move scanned documents
-* open and print files
-* confirm document completeness
-
-All documents remain **strictly organized per customer**.
+Χωρίς αυτές, η αποθήκευση δεν επιτρέπεται.
 
 ---
 
-### 6. Search & Customer History
-
-The **Search** tab allows retrieval by:
-
-* customer ID
-* name
-* phone number
-
-From the results, users can:
-
-* open customer details
-* view notes
-* access documents
-* review full action history
+### 2.5 Υπηρεσίες και πληρωμή
+- Επιλέξτε τουλάχιστον μία υπηρεσία
+- Το σύστημα υπολογίζει αυτόματα:
+  - Σύνολο
+  - Υπόλοιπο
+- Συμπληρώστε το ποσό που πληρώθηκε
 
 ---
 
-### 7. Dashboard & Reporting
+### 2.6 Αποθήκευση
+Πατήστε «Αποθήκευση πελάτη στο Excel».
 
-The Dashboard provides an overview of:
-
-* all customers
-* balances
-* service status
-* document confirmation state
-
-Available actions:
-
-* filtering by ID / Name / Phone
-* sorting results
-* exporting reports to PDF
-* printing clean summaries
+Η εφαρμογή:
+- εκχωρεί αυτόματο ID
+- δημιουργεί φάκελο πελάτη
+- αποθηκεύει την εγγραφή
 
 ---
 
-### 8. Operating Principles
+## 3. Διαχείριση Αρχείων
 
-* Fully offline operation
-* Local data storage only
-* No cloud services
-* No subscriptions
-* No external dependencies
+### 3.1 Pending αρχεία
+Μετά την αποθήκευση πελάτη:
+- Σύρετε αρχεία στο πλαίσιο
+- ή επιλέξτε «Προσθήκη αρχείων»
 
----
-
-## SECTION 2 — TECHNICAL DOCUMENTATION
-
-### (For developers, IT staff, and maintainers)
+Τα αρχεία εμφανίζονται ως προσωρινά (pending).
 
 ---
 
-### 1. Design Philosophy
+### 3.2 Μεταφορά στον φάκελο πελάτη
+Επιλέξτε:
+«Μεταφορά pending → φάκελο πελάτη»
 
-Client Manager is intentionally designed to be:
-
-* local-first
-* single-instance
-* easy to audit
-* easy to maintain
-
-There is:
-
-* no server
-* no background services
-* no external database engine
+Σε περίπτωση σύγκρουσης ονόματος, το αρχείο μετονομάζεται αυτόματα.
 
 ---
 
-### 2. Technology Stack
-
-* Python 3
-* PySide6 (Qt) — graphical interface
-* openpyxl — Excel read/write
-
-Standard libraries:
-
-* pathlib
-* json
-* csv
-* hashlib
-* datetime
+### 3.3 Φάκελος Scanner
+Αν χρησιμοποιείται scanner:
+1. Ορίστε φάκελο scanner
+2. Αποθηκεύστε τη ρύθμιση
+3. Επιλέξτε αρχείο
+4. Μεταφέρετε στον φάκελο πελάτη
 
 ---
 
-### 3. Runtime File Structure
+### 3.4 Εκτύπωση
+Επιλέξτε αρχείο και πατήστε «Εκτύπωση».
+Αν η άμεση εκτύπωση δεν είναι διαθέσιμη, το αρχείο ανοίγει.
 
-On first launch, the application initializes the following structure:
+---
 
-```
-%APPDATA%/ClientManagerV1/
-│
-├─ clients.xlsx        # Primary datastore
-├─ users.json          # User credentials & settings
-├─ audit_log.csv       # Complete action history
-└─ clients/
-   ├─ 1 - John Doe/
-   ├─ 2 - Maria Papas/
-   └─ ...
+### 3.5 Επιβεβαίωση αρχείων
+Με την ολοκλήρωση:
+- Πατήστε «Επιβεβαίωση αρχείων»
+- Καταγράφεται ποιος και πότε επιβεβαίωσε
+
+---
+
+## 4. Αναζήτηση
+Αναζήτηση με:
+- ID
+- Όνομα (μερική αντιστοίχιση)
+- Τηλέφωνο (μερική αντιστοίχιση)
+
+Δυνατότητες:
+- Προεπισκόπηση
+- Άνοιγμα καρτέλας πελάτη
+- Άνοιγμα φακέλου
+- Εκτύπωση αρχείων
+
+---
+
+## 5. Καρτέλα Πελάτη
+Στην καρτέλα μπορείτε:
+- να διορθώσετε ΑΦΜ / ΑΜΚΑ / ΑΜΑ
+- να ενημερώσετε σημειώσεις
+- να δείτε αρχεία
+- να δείτε ιστορικό ενεργειών
+
+---
+
+## 6. Dashboard
+Παρέχει φίλτρα:
+- ID ή εύρος ID
+- Όνομα
+- Τηλέφωνο
+- Υπόλοιπο
+- Χρονικά φίλτρα
+
+### Εξαγωγή PDF
+- Επιλέξτε «Εξαγωγή → PDF»
+- Δημιουργείται αναφορά του πίνακα
+
+---
+
+## 7. Συχνά προβλήματα
+- Το Excel είναι ανοιχτό: κλείστε το και δοκιμάστε ξανά
+- Ο φάκελος δεν υπάρχει: ελέγξτε τη ρίζα φακέλων
+- Αλλαγή ρίζας: παλιοί πελάτες μπορεί να δείχνουν σε παλιές διαδρομές
+
+---
+
+# ΤΕΧΝΙΚΑ / DEVELOPER NOTES
+
+## 1. Τεχνολογίες
+- Python 3.10+
+- PySide6
+- openpyxl
+- csv, json, pathlib, datetime
+
+---
+
+## 2. Αποθήκευση Δεδομένων
+Όλα τα δεδομένα αποθηκεύονται στο:
 ```
 
-The structure is auto-created and self-healing.
+%AppData%\ClientManagerV1\
+
+````
+
+Περιλαμβάνει:
+- clients.xlsx
+- users.json
+- audit_log.csv
+- φακέλους πελατών
 
 ---
 
-### 4. Excel as Datastore
+## 3. Excel
+- Worksheet: `Clients`
+- Headers αγγλικά για σταθερότητα
+- Αυτόματη προσθήκη νέων headers (migration)
 
-Excel is intentionally used as a lightweight datastore:
-
-* One row per customer
-* IDs assigned using the smallest available number
-* Controlled access through the application only
-* Automatic header migration between versions
-
-This avoids:
-
-* SQL complexity
-* additional dependencies
-* concurrency corruption
+Δεν συνιστάται χειροκίνητη επεξεργασία headers.
 
 ---
 
-### 5. Security Model
-
-* Passwords stored as SHA-256 hashes
-* No plaintext credentials
-* Full audit logging of:
-
-  * logins
-  * edits
-  * file operations
-  * confirmations
-
-This model provides **office-level accountability**, not enterprise security.
+## 4. Authentication
+- Αποθήκευση χρηστών σε users.json
+- Κωδικοί σε sha256 (χωρίς salt)
+- Default admin / 1234
 
 ---
 
-### 6. Building the Executable
+## 5. Audit Log
+CSV καταγραφή για:
+LOGIN, CREATE, EDIT, SEARCH, PRINT, ADD_FILES, CONFIRM_FILES
 
-To generate a standalone Windows executable:
+---
+
+## 6. File System
+- Αυτόματη δημιουργία φακέλων
+- Sanitized ονόματα
+- Αυτόματη μετονομασία σε σύγκρουση αρχείων
+- Windows-only λειτουργίες (os.startfile)
+
+---
+
+## 7. PDF Export (PySide6)
+Για εκτύπωση QTextDocument:
+```python
+doc.print_(printer)
+````
+
+Η χρήση `print()` δεν υποστηρίζεται στο PySide6.
+
+---
+
+## 8. Themes
+
+* Dark / Light
+* Αποθήκευση επιλογής στο users.json
+* Global stylesheet
+
+---
+
+## 9. Packaging
+
+Ενδεικτικά:
 
 ```bash
-python -m PyInstaller --noconsole --onefile main.py
+pyinstaller --onefile --noconsole client_manager_v1.py
 ```
 
-Output:
+---
+
+## 10. Περιορισμοί
+
+* Δεν υποστηρίζεται ταυτόχρονη χρήση από πολλούς χρήστες
+* Excel δεν είναι database
+* Ευαίσθητα πεδία αποθηκεύονται σε plain text
+* Υποστηρίζεται μόνο Windows
+
+---
+
+## 11. Προτεινόμενες βελτιώσεις
+
+* Μετάβαση σε SQLite
+* Κρυπτογράφηση ευαίσθητων δεδομένων
+* Ασφαλέστερο hashing κωδικών
+* Εργαλείο μετεγκατάστασης φακέλων
+* Cross-platform υποστήριξη
 
 ```
-dist/main.exe
+
+---
+
+Αν θέλεις, μπορώ:
+- να το προσαρμόσω σε **εταιρικό manual**
+- να το μετατρέψω σε **PDF / Word**
+- ή να σου γράψω **σύντομη “σελίδα βοήθειας” μέσα στην εφαρμογή** (Help → About) με βάση αυτό το README.
 ```
-
-The executable includes:
-
-* Python runtime
-* all dependencies
-* no external requirements
-
----
-
-### 7. Transparency & Decompilation
-
-The application is **not obfuscated by design**.
-
-Reasons:
-
-* transparency
-* long-term maintainability
-* ease of extension
-
-The source is meant to be readable and adaptable.
-
----
-
-### 8. Extension Possibilities
-
-The architecture allows future expansion:
-
-* migration to SQLite
-* role-based permissions
-* cloud synchronization
-* automated backups
-* multi-office support
-
----
-
-## SECTION 3 — LICENSE
-
-This project is released under a **custom internal-use license**.
-
-Permitted:
-
-* internal use
-* modification
-* deployment within an organization
-
-Not permitted:
-
-* resale
-* sublicensing
-* removal of author attribution
-
-Refer to the `LICENSE` file for full terms.
-
----
-
-© 2025 — Author: [PanosPDS/CRM]
-All rights reserved.
-
