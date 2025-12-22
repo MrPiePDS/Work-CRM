@@ -2,15 +2,14 @@ import sys
 import json
 import csv
 import hashlib
+import html as _html
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, List, Tuple
-import html as html_mod
 
 from PySide6.QtCore import Qt, QMarginsF
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrinter
-from PySide6.QtGui import QPageLayout, QPageSize
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QMessageBox, QFrame, QComboBox, QCheckBox, QTabWidget,
@@ -19,15 +18,22 @@ from PySide6.QtWidgets import (
 )
 
 from openpyxl import Workbook, load_workbook
+from PySide6.QtGui import QPageLayout, QPageSize
 
 
-# ----------------------------- Material-ish Style (QSS) -----------------------------
-MATERIAL_STYLE = """
+# ----------------------------- Styles -----------------------------
+DARK_STYLE = """
 * { font-family: 'Segoe UI'; font-size: 14px; }
 QWidget { background-color: #121212; color: #E6E1E5; }
 QFrame#card { background-color: #1E1E1E; border-radius: 16px; }
 QLabel#title { font-size: 20px; font-weight: 600; }
 QLabel#muted { color: #A1A1A1; }
+QLabel#chip {
+    background-color: #2A2A2A;
+    border: 1px solid #3A3A3A;
+    border-radius: 10px;
+    padding: 8px 10px;
+}
 QLineEdit, QTextEdit, QComboBox {
     background-color: #2A2A2A;
     border-radius: 12px;
@@ -71,10 +77,99 @@ QHeaderView::section {
     border: 0px;
     color: #E6E1E5;
 }
+
+/* Switch style (QCheckBox) */
+QCheckBox#themeSwitch::indicator {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: #3A3A3A;
+    border: 1px solid #5A5A5A;
+}
+QCheckBox#themeSwitch::indicator:checked {
+    background: #6750A4;
+    border: 1px solid #7F67BE;
+}
+QCheckBox#themeSwitch { padding: 0px; }
+"""
+
+LIGHT_STYLE = """
+* { font-family: 'Segoe UI'; font-size: 14px; }
+QWidget { background-color: #F7F7FB; color: #1A1A1A; }
+QFrame#card { background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E6E6F0; }
+QLabel#title { font-size: 20px; font-weight: 600; }
+QLabel#muted { color: #585A61; }
+QLabel#chip {
+    background-color: #F2F2F7;
+    border: 1px solid #E6E6F0;
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+QLineEdit, QTextEdit, QComboBox {
+    background-color: #FFFFFF;
+    border-radius: 12px;
+    padding: 10px;
+    border: 1px solid #D7D7E2;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 2px solid #6750A4; }
+QPushButton {
+    background-color: #6750A4;
+    color: #FFFFFF;
+    border-radius: 14px;
+    padding: 10px 12px;
+    font-weight: 600;
+}
+QPushButton:hover { background-color: #7F67BE; }
+QPushButton#secondary { background-color: #F2F2F7; color: #1A1A1A; }
+QPushButton#secondary:hover { background-color: #E9E9F2; }
+
+QLabel#drop {
+    border: 2px dashed #6750A4;
+    border-radius: 16px;
+    padding: 18px;
+    color: #3B2A6B;
+}
+QTabWidget::pane { border: 0px; }
+QTabBar::tab {
+    background: #FFFFFF;
+    padding: 10px 14px;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    margin-right: 6px;
+    border: 1px solid #E6E6F0;
+    border-bottom: 0px;
+}
+QTabBar::tab:selected { background: #F2F2F7; }
+QTableWidget {
+    background-color: #FFFFFF;
+    border-radius: 12px;
+    gridline-color: #E6E6F0;
+    border: 1px solid #E6E6F0;
+}
+QHeaderView::section {
+    background-color: #F2F2F7;
+    padding: 8px;
+    border: 0px;
+    color: #1A1A1A;
+}
+
+/* Switch style (QCheckBox) */
+QCheckBox#themeSwitch::indicator {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: #D7D7E2;
+    border: 1px solid #C7C7D4;
+}
+QCheckBox#themeSwitch::indicator:checked {
+    background: #6750A4;
+    border: 1px solid #7F67BE;
+}
+QCheckBox#themeSwitch { padding: 0px; }
 """
 
 
-# ----------------------------- Data Paths (auto-created) -----------------------------
+# ----------------------------- Data Paths -----------------------------
 APP_NAME = "ClientManagerV1"
 
 def data_dir() -> Path:
@@ -98,12 +193,16 @@ HEADERS = [
     "Date",
     "Name",
     "Phone",
-    "Taxisnet",
+    "AFM",
+    "HasTaxisnet",        # Yes/No
+    "TaxisnetUser",       # optional
+    "TaxisnetPass",       # optional (NOTE: storing passwords is risky; but keeping per your request)
     "Kleidarithmos",      # Confirmed / Rejected
     "AMKA_AMA",           # Confirmed / Rejected
-    "Aporipsi",           # Yes / No
-    "RequestNotes",       # free text
-    "ActionsToday",       # checkboxes list
+    "Aporipsi",           # No / Yes
+    "ActionsToday",       # selected services
+    "PaymentMethod",      # optional
+    "RequestNotes",       # moved to end (per your earlier request)
     "Total",
     "Paid",
     "Balance",
@@ -117,7 +216,7 @@ HEADERS = [
 ]
 
 
-# ----------------------------- Services -----------------------------
+# ----------------------------- Services / Payments -----------------------------
 SERVICES = [
     ("AMKA / AMA", 160),
     ("Metavoli / Change", 20),
@@ -125,6 +224,8 @@ SERVICES = [
     ("AFM / Tax number", 50),
     ("Work", 75),
 ]
+
+PAYMENT_METHODS = ["(none)", "Cash", "Card", "Bank transfer"]
 
 
 # ----------------------------- Utilities -----------------------------
@@ -184,7 +285,7 @@ def human_duration(from_iso: str) -> str:
 def ensure_users_file() -> None:
     if not USERS_PATH.exists():
         users = {
-            "_settings": {"scanner_folder": ""},
+            "_settings": {"scanner_folder": "", "theme": "dark"},
             "admin": {"password_hash": sha256("1234"), "created_at": now_iso()}
         }
         USERS_PATH.write_text(json.dumps(users, indent=2), encoding="utf-8")
@@ -218,6 +319,17 @@ def set_scanner_folder(path: str) -> None:
     users = load_users()
     users.setdefault("_settings", {})
     users["_settings"]["scanner_folder"] = path
+    save_users(users)
+
+def get_theme() -> str:
+    users = load_users()
+    t = (users.get("_settings", {}) or {}).get("theme", "dark")
+    return t if t in ("dark", "light") else "dark"
+
+def set_theme(theme: str) -> None:
+    users = load_users()
+    users.setdefault("_settings", {})
+    users["_settings"]["theme"] = "light" if theme == "light" else "dark"
     save_users(users)
 
 
@@ -257,7 +369,7 @@ def headers_map(ws) -> dict:
 
 # ✅ smallest available ID (fills gaps)
 def get_next_id() -> int:
-    _wb, ws = open_ws()
+    wb, ws = open_ws()
     cols = headers_map(ws)
     id_col = cols.get("ID", 1)
 
@@ -277,7 +389,7 @@ def get_next_id() -> int:
     return nxt
 
 def find_rows(query_id: str = "", query_name: str = "", query_phone: str = "") -> List[int]:
-    _wb, ws = open_ws()
+    wb, ws = open_ws()
     cols = headers_map(ws)
 
     query_id = query_id.strip()
@@ -286,9 +398,9 @@ def find_rows(query_id: str = "", query_name: str = "", query_phone: str = "") -
 
     results = []
     for r in range(2, ws.max_row + 1):
-        cid = str(ws.cell(r, cols["ID"]).value or "").strip()
-        name = str(ws.cell(r, cols["Name"]).value or "").strip().lower()
-        phone = str(ws.cell(r, cols["Phone"]).value or "").strip()
+        cid = str(ws.cell(r, cols.get("ID", 1)).value or "").strip()
+        name = str(ws.cell(r, cols.get("Name", 1)).value or "").strip().lower()
+        phone = str(ws.cell(r, cols.get("Phone", 1)).value or "").strip()
 
         ok = True
         if query_id:
@@ -604,8 +716,8 @@ class MainWindow(QWidget):
         self.user = current_user
         self.setWindowTitle("Client Manager v1")
 
-        # Allow Windows Snap/Tiling + avoid clipping
-        self.setMinimumSize(860, 560)
+        # Snap/Tiling friendly
+        self.setMinimumSize(820, 520)
         self.resize(1100, 740)
 
         self.pending_files: List[str] = []
@@ -613,9 +725,10 @@ class MainWindow(QWidget):
         self.last_saved_customer_folder: Optional[Path] = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
-        root.setSpacing(14)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(12)
 
+        # Header
         header = QHBoxLayout()
         title = QLabel("Client Manager")
         title.setObjectName("title")
@@ -625,13 +738,26 @@ class MainWindow(QWidget):
 
         header.addWidget(title)
         header.addStretch(1)
+
+        # Theme switch
+        self.theme_switch = QCheckBox("")
+        self.theme_switch.setObjectName("themeSwitch")
+        self.theme_switch.setToolTip("Toggle light/dark mode")
+        self.theme_switch.stateChanged.connect(self.on_toggle_theme)
+
+        self.lbl_theme = QLabel("Dark")
+        self.lbl_theme.setObjectName("muted")
+
+        header.addWidget(self.lbl_theme)
+        header.addWidget(self.theme_switch)
+        header.addSpacing(10)
         header.addWidget(self.lbl_status)
         root.addLayout(header)
 
+        # Tabs
         self.tabs = QTabWidget()
         root.addWidget(self.tabs)
 
-        # Make each tab scrollable (no more hidden UI)
         self.tab_new_scroll, self.tab_new_inner = self.make_scroll_tab()
         self.tab_search_scroll, self.tab_search_inner = self.make_scroll_tab()
         self.tab_dashboard_scroll, self.tab_dashboard_inner = self.make_scroll_tab()
@@ -644,6 +770,9 @@ class MainWindow(QWidget):
         self.build_tab_search(self.tab_search_inner)
         self.build_tab_dashboard(self.tab_dashboard_inner)
 
+        # Apply saved theme
+        self.apply_theme(get_theme())
+
         self.refresh_next_id()
         self.refresh_dashboard()
 
@@ -655,87 +784,191 @@ class MainWindow(QWidget):
         scroll.setWidget(inner)
         return scroll, inner
 
+    def apply_theme(self, theme: str):
+        app = QApplication.instance()
+        if not app:
+            return
+        if theme == "light":
+            app.setStyleSheet(LIGHT_STYLE)
+            self.theme_switch.blockSignals(True)
+            self.theme_switch.setChecked(True)
+            self.theme_switch.blockSignals(False)
+            self.lbl_theme.setText("Light")
+        else:
+            app.setStyleSheet(DARK_STYLE)
+            self.theme_switch.blockSignals(True)
+            self.theme_switch.setChecked(False)
+            self.theme_switch.blockSignals(False)
+            self.lbl_theme.setText("Dark")
+        set_theme(theme)
+
+    def on_toggle_theme(self):
+        self.apply_theme("light" if self.theme_switch.isChecked() else "dark")
+
     # ---------------- New Customer Tab ----------------
     def build_tab_new(self, parent: QWidget):
         lay = QVBoxLayout(parent)
-        lay.setSpacing(14)
+        lay.setSpacing(12)
 
         card = QFrame(); card.setObjectName("card")
-        c = QVBoxLayout(card); c.setContentsMargins(16, 16, 16, 16); c.setSpacing(10)
+        c = QVBoxLayout(card); c.setContentsMargins(14, 14, 14, 14); c.setSpacing(10)
 
+        # Top row: service + next id + date (locked)
         top = QHBoxLayout()
-        self.service_type = QComboBox(); self.service_type.addItems(["KEP", "Nomika"])
-        self.lbl_next_id = QLabel("Next ID: -"); self.lbl_next_id.setObjectName("muted")
+        self.service_type = QComboBox()
+        self.service_type.addItems(["KEP", "Nomika"])
+        self.service_type.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        self.lbl_next_id = QLabel("Next ID: -")
+        self.lbl_next_id.setObjectName("chip")
+
+        self.lbl_date = QLabel(date.today().isoformat())
+        self.lbl_date.setObjectName("chip")
+        self.lbl_date.setToolTip("Date is locked (auto).")
 
         top.addWidget(QLabel("Service type:"))
         top.addWidget(self.service_type)
         top.addStretch(1)
+        top.addWidget(QLabel("Date:"))
+        top.addWidget(self.lbl_date)
+        top.addSpacing(10)
         top.addWidget(self.lbl_next_id)
         c.addLayout(top)
 
-        self.in_date = QLineEdit(date.today().isoformat())
+        # Compact grid form
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+
         self.in_name = QLineEdit(); self.in_name.setPlaceholderText("Name & Surname")
         self.in_phone = QLineEdit(); self.in_phone.setPlaceholderText("Phone number")
-        self.in_taxis = QLineEdit(); self.in_taxis.setPlaceholderText("Taxisnet (note)")
+        self.in_afm = QLineEdit(); self.in_afm.setPlaceholderText("AFM")
+        self.in_taxis_note = QLineEdit(); self.in_taxis_note.setPlaceholderText("Taxisnet (note)")
 
-        for w in (self.in_date, self.in_name, self.in_phone, self.in_taxis):
+        for w in (self.in_name, self.in_phone, self.in_afm, self.in_taxis_note):
             w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        row1 = QHBoxLayout(); row1.addWidget(self.in_date); row1.addWidget(self.in_name)
-        row2 = QHBoxLayout(); row2.addWidget(self.in_phone); row2.addWidget(self.in_taxis)
-        c.addLayout(row1); c.addLayout(row2)
+        grid.addWidget(QLabel("Name:"), 0, 0)
+        grid.addWidget(self.in_name,     0, 1, 1, 3)
 
+        grid.addWidget(QLabel("Phone:"), 1, 0)
+        grid.addWidget(self.in_phone,    1, 1)
+
+        grid.addWidget(QLabel("AFM:"),   1, 2)
+        grid.addWidget(self.in_afm,      1, 3)
+
+        grid.addWidget(QLabel("Taxis note:"), 2, 0)
+        grid.addWidget(self.in_taxis_note,    2, 1, 1, 3)
+
+        c.addLayout(grid)
+
+        # Has taxisnet -> reveals fields
+        row_tax = QHBoxLayout()
+        self.cb_has_taxis = QComboBox()
+        self.cb_has_taxis.addItems(["No", "Yes"])
+        self.cb_has_taxis.currentTextChanged.connect(self.on_has_taxis_changed)
+
+        row_tax.addWidget(QLabel("Has Taxisnet?"))
+        row_tax.addWidget(self.cb_has_taxis)
+        row_tax.addStretch(1)
+        c.addLayout(row_tax)
+
+        self.taxis_box = QFrame()
+        self.taxis_box.setObjectName("card")
+        tb = QGridLayout(self.taxis_box)
+        tb.setContentsMargins(12, 12, 12, 12)
+        tb.setHorizontalSpacing(10)
+        tb.setVerticalSpacing(10)
+
+        self.in_taxis_user = QLineEdit(); self.in_taxis_user.setPlaceholderText("Taxisnet username")
+        self.in_taxis_pass = QLineEdit(); self.in_taxis_pass.setPlaceholderText("Taxisnet password")
+        self.in_taxis_pass.setEchoMode(QLineEdit.Password)
+
+        tb.addWidget(QLabel("Username:"), 0, 0)
+        tb.addWidget(self.in_taxis_user, 0, 1)
+        tb.addWidget(QLabel("Password:"), 1, 0)
+        tb.addWidget(self.in_taxis_pass, 1, 1)
+
+        self.taxis_box.setVisible(False)
+        c.addWidget(self.taxis_box)
+
+        # Status dropdowns (keep as dropdowns)
         row3 = QHBoxLayout()
         self.in_kleid = QComboBox(); self.in_kleid.addItems(["Confirmed", "Rejected"])
         self.in_amka = QComboBox(); self.in_amka.addItems(["Confirmed", "Rejected"])
         self.in_aporr = QComboBox(); self.in_aporr.addItems(["No", "Yes"])
-
         for w in (self.in_kleid, self.in_amka, self.in_aporr):
-            w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            w.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         row3.addWidget(QLabel("Kleidarithmos:")); row3.addWidget(self.in_kleid)
+        row3.addSpacing(10)
         row3.addWidget(QLabel("AMKA/AMA:")); row3.addWidget(self.in_amka)
+        row3.addSpacing(10)
         row3.addWidget(QLabel("Aporipsi:")); row3.addWidget(self.in_aporr)
+        row3.addStretch(1)
         c.addLayout(row3)
 
-        c.addWidget(QLabel("Customer request / notes:"))
-        self.in_request = QTextEdit(); self.in_request.setPlaceholderText("Customer request / notes")
-        self.in_request.setMinimumHeight(110)
-        self.in_request.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        c.addWidget(self.in_request)
-
+        # Confirm gating (checkboxes)
         c.addWidget(QLabel("Confirm before saving:"))
         self.cb_confirm_data = QCheckBox("I confirmed the customer data")
         self.cb_confirm_services = QCheckBox("I confirmed the selected services & pricing")
         c.addWidget(self.cb_confirm_data)
         c.addWidget(self.cb_confirm_services)
 
+        # Actions today (checkboxes) - compact 2 columns
         c.addWidget(QLabel("Actions today: (select at least one)"))
+        actions_grid = QGridLayout()
+        actions_grid.setHorizontalSpacing(10)
+        actions_grid.setVerticalSpacing(6)
+
         self.service_checks: List[QCheckBox] = []
-        for name, price in SERVICES:
+        for idx, (name, price) in enumerate(SERVICES):
             cb = QCheckBox(f"{name} ({price})")
             cb.stateChanged.connect(self.recalculate)
+            cb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             self.service_checks.append(cb)
-            c.addWidget(cb)
+            r = idx // 2
+            col = idx % 2
+            actions_grid.addWidget(cb, r, col)
+        c.addLayout(actions_grid)
 
+        # Payment + totals row (compact)
         pay = QHBoxLayout()
-        self.in_paid = QLineEdit(); self.in_paid.setPlaceholderText("Paid today")
-        self.in_paid.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmb_payment = QComboBox()
+        self.cmb_payment.addItems(PAYMENT_METHODS)
+        self.cmb_payment.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        self.in_paid = QLineEdit()
+        self.in_paid.setPlaceholderText("Paid today (amount)")
         self.in_paid.textChanged.connect(self.recalculate)
+        self.in_paid.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.in_paid.setFixedWidth(220)
 
-        self.lbl_total = QLabel("Total: 0"); self.lbl_total.setObjectName("muted")
-        self.lbl_balance = QLabel("Balance: 0"); self.lbl_balance.setObjectName("muted")
-
-        btn_calc = QPushButton("Recalculate"); btn_calc.setObjectName("secondary")
+        btn_calc = QPushButton("Recalculate")
+        btn_calc.setObjectName("secondary")
         btn_calc.clicked.connect(self.recalculate)
 
-        pay.addWidget(self.in_paid, 2)
-        pay.addWidget(btn_calc, 0)
+        self.lbl_total = QLabel("Total: 0.00"); self.lbl_total.setObjectName("chip")
+        self.lbl_balance = QLabel("Balance: 0.00"); self.lbl_balance.setObjectName("chip")
+
+        pay.addWidget(QLabel("Payment:"))
+        pay.addWidget(self.cmb_payment)
+        pay.addSpacing(10)
+        pay.addWidget(self.in_paid)
+        pay.addWidget(btn_calc)
         pay.addStretch(1)
         pay.addWidget(self.lbl_total)
         pay.addWidget(self.lbl_balance)
         c.addLayout(pay)
 
+        # Request (moved to end) - compact height
+        c.addWidget(QLabel("Customer request / notes:"))
+        self.in_request = QTextEdit()
+        self.in_request.setPlaceholderText("Customer request / notes")
+        self.in_request.setMinimumHeight(90)
+        c.addWidget(self.in_request)
+
+        # Save buttons
         btns = QHBoxLayout()
         self.btn_save_customer = QPushButton("Save customer to Excel")
         self.btn_save_customer.clicked.connect(self.save_customer)
@@ -750,24 +983,24 @@ class MainWindow(QWidget):
 
         lay.addWidget(card)
 
-        # Files card
+        # Files / scanner card
         card2 = QFrame(); card2.setObjectName("card")
-        c2 = QVBoxLayout(card2); c2.setContentsMargins(16, 16, 16, 16); c2.setSpacing(10)
+        c2 = QVBoxLayout(card2); c2.setContentsMargins(14, 14, 14, 14); c2.setSpacing(10)
 
         scanner_row = QHBoxLayout()
         self.in_scanner = QLineEdit(get_scanner_folder())
         self.in_scanner.setPlaceholderText("Scanner folder path (optional)")
         self.in_scanner.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        btn_set_scanner = QPushButton("Set scanner folder")
-        btn_set_scanner.setObjectName("secondary")
-        btn_set_scanner.clicked.connect(self.set_scanner_folder_ui)
-
         btn_browse_scanner = QPushButton("Browse…")
         btn_browse_scanner.setObjectName("secondary")
         btn_browse_scanner.clicked.connect(self.browse_scanner_folder)
 
-        scanner_row.addWidget(self.in_scanner, 5)
+        btn_set_scanner = QPushButton("Set scanner folder")
+        btn_set_scanner.setObjectName("secondary")
+        btn_set_scanner.clicked.connect(self.set_scanner_folder_ui)
+
+        scanner_row.addWidget(self.in_scanner, 6)
         scanner_row.addWidget(btn_browse_scanner, 0)
         scanner_row.addWidget(btn_set_scanner, 0)
         c2.addLayout(scanner_row)
@@ -782,7 +1015,6 @@ class MainWindow(QWidget):
         pending_col.addWidget(QLabel("Pending files"))
         self.list_pending = QListWidget()
         self.list_pending.setMinimumHeight(120)
-        self.list_pending.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         pending_col.addWidget(self.list_pending)
         lists_row.addLayout(pending_col, 2)
 
@@ -790,7 +1022,6 @@ class MainWindow(QWidget):
         folder_col.addWidget(QLabel("Customer folder files"))
         self.list_folder = QListWidget()
         self.list_folder.setMinimumHeight(120)
-        self.list_folder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         folder_col.addWidget(self.list_folder)
         lists_row.addLayout(folder_col, 2)
 
@@ -798,7 +1029,6 @@ class MainWindow(QWidget):
         scanner_col.addWidget(QLabel("Scanner folder files"))
         self.list_scanner = QListWidget()
         self.list_scanner.setMinimumHeight(120)
-        self.list_scanner.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         scanner_col.addWidget(self.list_scanner)
         lists_row.addLayout(scanner_col, 2)
 
@@ -837,8 +1067,13 @@ class MainWindow(QWidget):
         lay.addWidget(card2)
         lay.addStretch(1)
 
+    def on_has_taxis_changed(self, txt: str):
+        self.taxis_box.setVisible(txt == "Yes")
+
     def refresh_next_id(self):
         self.lbl_next_id.setText(f"Next ID: {get_next_id()}")
+        # also refresh locked date label (today)
+        self.lbl_date.setText(date.today().isoformat())
 
     def selected_services(self) -> List[Tuple[str, int]]:
         selected = []
@@ -885,19 +1120,27 @@ class MainWindow(QWidget):
         customer_id = get_next_id()
         folder = ensure_customer_folder(customer_id, name)
 
+        has_taxis = self.cb_has_taxis.currentText()
+        t_user = self.in_taxis_user.text().strip() if has_taxis == "Yes" else ""
+        t_pass = self.in_taxis_pass.text() if has_taxis == "Yes" else ""
+
         wb, ws = open_ws()
         ws.append([
             customer_id,
             self.service_type.currentText(),
-            self.in_date.text().strip() or date.today().isoformat(),
+            date.today().isoformat(),                      # ✅ date locked (auto)
             name,
             phone,
-            self.in_taxis.text().strip(),
+            self.in_afm.text().strip(),
+            has_taxis,
+            t_user,
+            t_pass,
             self.in_kleid.currentText(),
             self.in_amka.currentText(),
             self.in_aporr.currentText(),
-            self.in_request.toPlainText(),
             ", ".join([f"{n}({p})" for n, p in services]),
+            self.cmb_payment.currentText(),
+            self.in_request.toPlainText(),                 # notes at end (before totals is fine too)
             total,
             paid,
             balance,
@@ -921,16 +1164,19 @@ class MainWindow(QWidget):
         self.refresh_dashboard()
 
         QMessageBox.information(self, "Saved", f"Customer saved with ID {customer_id}.")
-        self.clear_form(keep_date=True)
+        self.clear_form()
 
-    def clear_form(self, keep_date: bool = True):
-        if not keep_date:
-            self.in_date.setText(date.today().isoformat())
+    def clear_form(self):
         self.in_name.clear()
         self.in_phone.clear()
-        self.in_taxis.clear()
+        self.in_afm.clear()
+        self.in_taxis_note.clear()
+        self.cb_has_taxis.setCurrentIndex(0)
+        self.in_taxis_user.clear()
+        self.in_taxis_pass.clear()
         self.in_request.clear()
         self.in_paid.clear()
+        self.cmb_payment.setCurrentIndex(0)
         for cb in self.service_checks:
             cb.setChecked(False)
         self.cb_confirm_data.setChecked(False)
@@ -938,6 +1184,7 @@ class MainWindow(QWidget):
         self.pending_files = []
         self.list_pending.clear()
         self.recalculate()
+        self.refresh_next_id()
 
     def open_last_folder(self):
         if not self.last_saved_customer_folder:
@@ -970,16 +1217,13 @@ class MainWindow(QWidget):
         if folder:
             self.in_scanner.setText(folder)
 
-    # ✅ IMPORTANT: This existed missing in your version sometimes -> causes crash. Keep it.
     def refresh_file_lists(self):
-        # Customer folder files
         self.list_folder.clear()
         if self.last_saved_customer_folder and self.last_saved_customer_folder.exists():
             for p in sorted(self.last_saved_customer_folder.iterdir()):
                 if p.is_file():
                     self.list_folder.addItem(QListWidgetItem(p.name))
 
-        # Scanner folder files
         self.list_scanner.clear()
         sp = self.in_scanner.text().strip()
         if sp:
@@ -1082,7 +1326,7 @@ class MainWindow(QWidget):
         wb, ws = open_ws()
         cols = headers_map(ws)
         for r in range(2, ws.max_row + 1):
-            if str(ws.cell(r, cols["ID"]).value).strip() == str(self.last_saved_customer_id):
+            if str(ws.cell(r, cols.get("ID", 1)).value).strip() == str(self.last_saved_customer_id):
                 update_row(ws, r, {
                     "FilesConfirmedBy": self.user,
                     "FilesConfirmedAt": now_iso(),
@@ -1100,22 +1344,22 @@ class MainWindow(QWidget):
     # ---------------- Search Tab ----------------
     def build_tab_search(self, parent: QWidget):
         lay = QVBoxLayout(parent)
-        lay.setSpacing(14)
+        lay.setSpacing(12)
 
         card = QFrame(); card.setObjectName("card")
-        c = QVBoxLayout(card); c.setContentsMargins(16, 16, 16, 16); c.setSpacing(10)
+        c = QVBoxLayout(card); c.setContentsMargins(14, 14, 14, 14); c.setSpacing(10)
 
         row = QHBoxLayout()
         self.q_id = QLineEdit(); self.q_id.setPlaceholderText("ID")
         self.q_name = QLineEdit(); self.q_name.setPlaceholderText("Name contains…")
         self.q_phone = QLineEdit(); self.q_phone.setPlaceholderText("Phone contains…")
 
-        for w in (self.q_id, self.q_name, self.q_phone):
-            w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
         btn = QPushButton("Search"); btn.clicked.connect(self.run_search)
 
-        row.addWidget(self.q_id, 1); row.addWidget(self.q_name, 2); row.addWidget(self.q_phone, 2); row.addWidget(btn, 0)
+        row.addWidget(self.q_id, 1)
+        row.addWidget(self.q_name, 2)
+        row.addWidget(self.q_phone, 2)
+        row.addWidget(btn, 0)
         c.addLayout(row)
 
         self.table = QTableWidget(0, 7)
@@ -1183,21 +1427,18 @@ class MainWindow(QWidget):
     # ---------------- Dashboard Tab ----------------
     def build_tab_dashboard(self, parent: QWidget):
         lay = QVBoxLayout(parent)
-        lay.setSpacing(14)
+        lay.setSpacing(12)
 
         card = QFrame(); card.setObjectName("card")
-        c = QVBoxLayout(card); c.setContentsMargins(16, 16, 16, 16); c.setSpacing(10)
+        c = QVBoxLayout(card); c.setContentsMargins(14, 14, 14, 14); c.setSpacing(10)
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(10)
 
-        self.f_id = QLineEdit()
-        self.f_id.setPlaceholderText("ID (e.g. 4 or 4-10)")
-        self.f_name = QLineEdit()
-        self.f_name.setPlaceholderText("Name contains")
-        self.f_phone = QLineEdit()
-        self.f_phone.setPlaceholderText("Phone contains")
+        self.f_id = QLineEdit(); self.f_id.setPlaceholderText("ID (e.g. 4 or 4-10)")
+        self.f_name = QLineEdit(); self.f_name.setPlaceholderText("Name contains")
+        self.f_phone = QLineEdit(); self.f_phone.setPlaceholderText("Phone contains")
 
         self.f_priority = QComboBox()
         self.f_priority.addItems(["All", "Has balance", "No balance"])
@@ -1205,7 +1446,6 @@ class MainWindow(QWidget):
         self.f_serving = QComboBox()
         self.f_serving.addItems(["All", "Today", "Last 24h", "Last 7 days", "Older than 7 days"])
 
-        # Sort by ID
         self.f_sort_id = QComboBox()
         self.f_sort_id.addItems(["ID ↑ (small→big)", "ID ↓ (big→small)"])
 
@@ -1218,12 +1458,11 @@ class MainWindow(QWidget):
 
         btn_pdf = QPushButton("Export → PDF")
         btn_pdf.setObjectName("secondary")
-        btn_pdf.clicked.connect(self.export_dashboard_pdf)  # ✅ correct name
+        btn_pdf.clicked.connect(self.export_dashboard_to_pdf)
 
         grid.addWidget(self.f_id,    0, 0)
         grid.addWidget(self.f_name,  0, 1)
         grid.addWidget(self.f_phone, 0, 2)
-
         grid.addWidget(self.f_priority, 1, 0)
         grid.addWidget(self.f_serving,  1, 1)
         grid.addWidget(self.f_sort_id,  1, 2)
@@ -1262,22 +1501,22 @@ class MainWindow(QWidget):
         self.f_sort_id.setCurrentIndex(0)
         self.refresh_dashboard()
 
-    # ✅ FIX: This method name matches the button connection now, and uses Qt6 page layout correctly.
-    def export_dashboard_pdf(self):
-        try:
-            path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Export Dashboard to PDF",
-                "dashboard.pdf",
-                "PDF Files (*.pdf)"
-            )
-            if not path:
-                return
+    def export_dashboard_to_pdf(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Dashboard to PDF",
+            "dashboard.pdf",
+            "PDF Files (*.pdf)"
+        )
+        if not path:
+            return
 
+        try:
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(path)
 
+            # Qt6 correct (no QPrinter.Landscape / .Landscape)
             page_layout = QPageLayout(
                 QPageSize(QPageSize.A4),
                 QPageLayout.Landscape,
@@ -1285,54 +1524,42 @@ class MainWindow(QWidget):
             )
             printer.setPageLayout(page_layout)
 
-            # Build HTML table with escaping
-            rows_html = []
+            # Build HTML table (escape text to avoid broken HTML)
+            doc_html = []
+            doc_html.append("<html><head><style>")
+            doc_html.append("body{font-family:Arial; font-size:10pt;}")
+            doc_html.append("table{border-collapse:collapse; width:100%;}")
+            doc_html.append("th{background:#f0f0f0; padding:6px; border:1px solid #999; text-align:left;}")
+            doc_html.append("td{padding:6px; border:1px solid #ccc;}")
+            doc_html.append("tr:nth-child(even){background:#fafafa;}")
+            doc_html.append("</style></head><body>")
+            doc_html.append("<h2>Client Manager – Dashboard Export</h2>")
+            doc_html.append("<table><tr>")
+            headers = ["ID", "Name", "Phone", "Balance", "Files", "Serving time"]
+            for h in headers:
+                doc_html.append(f"<th>{_html.escape(h)}</th>")
+            doc_html.append("</tr>")
+
             for row in range(self.dash.rowCount()):
-                cols_html = []
+                doc_html.append("<tr>")
                 for col in range(self.dash.columnCount()):
                     item = self.dash.item(row, col)
-                    txt = item.text() if item else ""
-                    cols_html.append(f"<td>{html_mod.escape(txt)}</td>")
-                rows_html.append("<tr>" + "".join(cols_html) + "</tr>")
+                    val = item.text() if item else ""
+                    doc_html.append(f"<td>{_html.escape(val)}</td>")
+                doc_html.append("</tr>")
 
-            html_doc = f"""
-            <html>
-            <head>
-            <meta charset="utf-8"/>
-            <style>
-                body {{ font-family: Arial; font-size: 10pt; }}
-                h2 {{ margin: 0 0 10px 0; }}
-                .meta {{ color: #666; font-size: 9pt; margin-bottom: 10px; }}
-                table {{ border-collapse: collapse; width: 100%; }}
-                th {{ background-color: #f0f0f0; padding: 6px; border: 1px solid #999; text-align: left; }}
-                td {{ padding: 6px; border: 1px solid #ccc; }}
-                tr:nth-child(even) {{ background-color: #fafafa; }}
-            </style>
-            </head>
-            <body>
-                <h2>Client Manager – Dashboard Export</h2>
-                <div class="meta">Exported: {html_mod.escape(now_iso())} | User: {html_mod.escape(self.user)}</div>
-                <table>
-                    <tr>
-                        <th>ID</th><th>Name</th><th>Phone</th><th>Balance</th><th>Files</th><th>Serving time</th>
-                    </tr>
-                    {''.join(rows_html)}
-                </table>
-            </body>
-            </html>
-            """
+            doc_html.append("</table></body></html>")
 
             doc = QTextDocument()
-            doc.setHtml(html_doc)
+            doc.setHtml("".join(doc_html))
             doc.print(printer)
 
             QMessageBox.information(self, "Export complete", f"PDF saved to:\n{path}")
-
         except Exception as e:
             QMessageBox.warning(self, "PDF export error", str(e))
 
     def refresh_dashboard(self):
-        _wb, ws = open_ws()
+        wb, ws = open_ws()
 
         fid = self.f_id.text().strip()
         fname = self.f_name.text().strip().lower()
@@ -1403,7 +1630,6 @@ class MainWindow(QWidget):
 
             files = "Yes" if (folder.exists() and any(p.is_file() for p in folder.iterdir())) else "No"
             serving_time = human_duration(created)
-
             items.append((cid_int, name, phone, bal, files, serving_time))
 
         reverse = (sort_mode == "ID ↓ (big→small)")
@@ -1427,7 +1653,8 @@ def main():
     ensure_users_file()
 
     app = QApplication(sys.argv)
-    app.setStyleSheet(MATERIAL_STYLE)
+    # Apply saved theme before UI loads
+    app.setStyleSheet(LIGHT_STYLE if get_theme() == "light" else DARK_STYLE)
 
     w = LoginWindow()
     w.show()
