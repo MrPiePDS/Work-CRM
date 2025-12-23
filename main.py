@@ -1,215 +1,29 @@
-# -*- coding: utf-8 -*-
-"""
-Client Manager v1 (ΕΛΛΗΝΙΚΑ) — Μονο-αρχείο για copy/paste.
-
-✅ ΔΙΟΡΘΩΣΕΙΣ ΠΟΥ ΕΓΙΝΑΝ (σε σχέση με το δικό σου κομμάτι):
-1) Καθάρισμα/διόρθωση imports (έφυγαν διπλά QRegularExpression/QRegularExpressionValidator, σωστή σειρά)
-2) FIX PDF Export: printer.pageRect(QPrinter.Point) (PySide6-safe, δεν πετάει missing argument)
-3) Excel storage hardening:
-   - ensure_excel() με try/except για corrupted/locked και δημιουργία backup πριν ξαναφτιάξει αρχείο
-   - open_ws() με καθαρό RuntimeError μήνυμα όταν το Excel είναι locked/δεν ανοίγει
-4) audit_log() fail-safe (αν κλειδωθεί/πρόβλημα I/O να μην κρασάρει)
-"""
-
 import sys
 import json
 import csv
 import hashlib
 import traceback
 import html as _html
+import subprocess
+import tempfile
+import zipfile
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, List, Tuple
+import urllib.request
 
-from PySide6.QtCore import Qt, QMarginsF, QRegularExpression
+from PySide6.QtCore import Qt, QMarginsF, QRegularExpression, QSize
 from PySide6.QtGui import QTextDocument, QRegularExpressionValidator, QPageLayout, QPageSize
-from PySide6.QtPrintSupport import QPrinter
+from PySide6.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QMessageBox, QFrame, QComboBox, QCheckBox, QTabWidget,
     QTableWidget, QTableWidgetItem, QDialog, QTextEdit, QFileDialog,
     QListWidget, QListWidgetItem, QScrollArea, QSizePolicy, QGridLayout,
-    QSplitter, QAbstractItemView
+    QSplitter, QAbstractItemView, QHeaderView
 )
 
 from openpyxl import Workbook, load_workbook
-
-
-# ----------------------------- Styles -----------------------------
-DARK_STYLE = """
-* { font-family: 'Segoe UI'; font-size: 14px; }
-QWidget { background-color: #121212; color: #E6E1E5; }
-QFrame#card { background-color: #1E1E1E; border-radius: 16px; }
-QFrame#subcard { background-color: #181818; border-radius: 14px; border: 1px solid #2A2A2A; }
-QLabel#title { font-size: 20px; font-weight: 600; }
-QLabel#subtitle { font-size: 16px; font-weight: 600; }
-QLabel#muted { color: #A1A1A1; }
-QLabel#chip {
-    background-color: #2A2A2A;
-    border: 1px solid #3A3A3A;
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-QLabel#chipGood {
-    background-color: #19311f;
-    border: 1px solid #2c6f3a;
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-QLabel#chipBad {
-    background-color: #331919;
-    border: 1px solid #7a2b2b;
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-QLineEdit, QTextEdit, QComboBox {
-    background-color: #2A2A2A;
-    border-radius: 12px;
-    padding: 10px;
-    border: 1px solid #3A3A3A;
-}
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 2px solid #6750A4; }
-QPushButton {
-    background-color: #6750A4;
-    border-radius: 14px;
-    padding: 10px 12px;
-    font-weight: 600;
-}
-QPushButton:hover { background-color: #7F67BE; }
-QPushButton#secondary { background-color: #2A2A2A; }
-QPushButton#secondary:hover { background-color: #333333; }
-
-QLabel#drop {
-    border: 2px dashed #6750A4;
-    border-radius: 16px;
-    padding: 18px;
-    color: #B69DF8;
-}
-QTabWidget::pane { border: 0px; }
-QTabBar::tab {
-    background: #1E1E1E;
-    padding: 10px 14px;
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-    margin-right: 6px;
-}
-QTabBar::tab:selected { background: #2A2A2A; }
-QTableWidget {
-    background-color: #1E1E1E;
-    border-radius: 12px;
-    gridline-color: #333;
-    border: 1px solid #2a2a2a;
-}
-QHeaderView::section {
-    background-color: #2A2A2A;
-    padding: 8px;
-    border: 0px;
-    color: #E6E1E5;
-}
-
-/* Switch style (QCheckBox) */
-QCheckBox#themeSwitch::indicator {
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    background: #3A3A3A;
-    border: 1px solid #5A5A5A;
-}
-QCheckBox#themeSwitch::indicator:checked {
-    background: #6750A4;
-    border: 1px solid #7F67BE;
-}
-QCheckBox#themeSwitch { padding: 0px; }
-"""
-
-LIGHT_STYLE = """
-* { font-family: 'Segoe UI'; font-size: 14px; }
-QWidget { background-color: #F7F7FB; color: #1A1A1A; }
-QFrame#card { background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E6E6F0; }
-QFrame#subcard { background-color: #FFFFFF; border-radius: 14px; border: 1px solid #E6E6F0; }
-QLabel#title { font-size: 20px; font-weight: 600; }
-QLabel#subtitle { font-size: 16px; font-weight: 600; }
-QLabel#muted { color: #585A61; }
-QLabel#chip {
-    background-color: #F2F2F7;
-    border: 1px solid #E6E6F0;
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-QLabel#chipGood {
-    background-color: #e7f6ea;
-    border: 1px solid #bfe7c8;
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-QLabel#chipBad {
-    background-color: #fdeaea;
-    border: 1px solid #f2bcbc;
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-QLineEdit, QTextEdit, QComboBox {
-    background-color: #FFFFFF;
-    border-radius: 12px;
-    padding: 10px;
-    border: 1px solid #D7D7E2;
-}
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 2px solid #6750A4; }
-QPushButton {
-    background-color: #6750A4;
-    color: #FFFFFF;
-    border-radius: 14px;
-    padding: 10px 12px;
-    font-weight: 600;
-}
-QPushButton:hover { background-color: #7F67BE; }
-QPushButton#secondary { background-color: #F2F2F7; color: #1A1A1A; }
-QPushButton#secondary:hover { background-color: #E9E9F2; }
-
-QLabel#drop {
-    border: 2px dashed #6750A4;
-    border-radius: 16px;
-    padding: 18px;
-    color: #3B2A6B;
-}
-QTabWidget::pane { border: 0px; }
-QTabBar::tab {
-    background: #FFFFFF;
-    padding: 10px 14px;
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-    margin-right: 6px;
-    border: 1px solid #E6E6F0;
-    border-bottom: 0px;
-}
-QTabBar::tab:selected { background: #F2F2F7; }
-QTableWidget {
-    background-color: #FFFFFF;
-    border-radius: 12px;
-    gridline-color: #E6E6F0;
-    border: 1px solid #E6E6F0;
-}
-QHeaderView::section {
-    background-color: #F2F2F7;
-    padding: 8px;
-    border: 0px;
-    color: #1A1A1A;
-}
-
-/* Switch style (QCheckBox) */
-QCheckBox#themeSwitch::indicator {
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    background: #D7D7E2;
-    border: 1px solid #C7C7D4;
-}
-QCheckBox#themeSwitch::indicator:checked {
-    background: #6750A4;
-    border: 1px solid #7F67BE;
-}
-QCheckBox#themeSwitch { padding: 0px; }
-"""
 
 
 # ----------------------------- Data Paths -----------------------------
@@ -227,6 +41,512 @@ AUDIT_PATH = DATA_DIR / "audit_log.csv"
 
 DEFAULT_CLIENTS_ROOT = DATA_DIR / "clients"
 DEFAULT_CLIENTS_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+# ----------------------------- Improved PDF Printing -----------------------------
+def ensure_sumatrapdf() -> Optional[Path]:
+    """Ελέγχει και κατεβάζει το SumatraPDF αν δεν υπάρχει."""
+    sumatra_exe = DATA_DIR / "SumatraPDF.exe"
+    
+    if sumatra_exe.exists():
+        return sumatra_exe
+    
+    try:
+        # Κατέβασμα SumatraPDF (έκδοση 3.5.2 - portable)
+        url = "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.zip"
+        
+        QMessageBox.information(None, "Λήψη SumatraPDF", 
+            "Το πρόγραμμα θα κατεβάσει το SumatraPDF (2.5 MB) για σωστή εκτύπωση PDF.\n"
+            "Αυτό γίνεται μόνο μια φορά.\n\n"
+            "Παρακαλώ περιμένετε...")
+        
+        # Κατέβασμα του ZIP
+        temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
+        temp_zip_path = temp_zip.name
+        temp_zip.close()
+        
+        try:
+            urllib.request.urlretrieve(url, temp_zip_path)
+            
+            # Αποσυμπίεση
+            with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+                # Βρίσκουμε το SumatraPDF.exe στο zip
+                for file_info in zip_ref.infolist():
+                    if 'SumatraPDF.exe' in file_info.filename:
+                        # Αποσυμπίεση στο data directory
+                        zip_ref.extract(file_info, DATA_DIR)
+                        extracted_path = DATA_DIR / file_info.filename
+                        
+                        # Αν το extracted file είναι σε subdirectory, μετακινήστε το
+                        if extracted_path.parent != DATA_DIR:
+                            target_path = DATA_DIR / "SumatraPDF.exe"
+                            extracted_path.rename(target_path)
+                            sumatra_exe = target_path
+                        break
+            
+            # Διαγραφή αρχείου zip
+            Path(temp_zip_path).unlink(missing_ok=True)
+            
+            if sumatra_exe.exists():
+                return sumatra_exe
+                
+        except Exception as e:
+            print(f"Σφάλμα κατά τη λήψη/αποσυμπίεση: {e}")
+            return None
+            
+    except Exception as e:
+        print(f"Αποτυχία λήψης SumatraPDF: {e}")
+        return None
+    
+    return None
+
+
+def print_pdf_with_sumatra(pdf_path: Path) -> bool:
+    """Εκτύπωση PDF με SumatraPDF (πιο αξιόπιστη)."""
+    sumatra = ensure_sumatrapdf()
+    
+    if sumatra and sumatra.exists():
+        try:
+            # Χρήση SumatraPDF για εκτύπωση
+            cmd = [str(sumatra), "-print-to-default", "-silent", str(pdf_path)]
+            subprocess.run(cmd, timeout=30, check=True)
+            return True
+        except Exception as e:
+            print(f"Σφάλμα εκτύπωσης με SumatraPDF: {e}")
+            # Πτώση πίσω στην παλιά μέθοδο
+            return print_file_windows(pdf_path)
+    else:
+        # Αν δεν υπάρχει SumatraPDF, χρησιμοποιήστε την παλιά μέθοδο
+        return print_file_windows(pdf_path)
+
+
+def print_file_windows(path: Path) -> bool:
+    """Παλιά μέθοδος εκτύπωσης (μπορεί να τυπώνει μόνο την πρώτη σελίδα)."""
+    try:
+        import os
+        if path.suffix.lower() == '.pdf':
+            # Για PDF, χρησιμοποιήστε το SumatraPDF αν είναι διαθέσιμο
+            sumatra = ensure_sumatrapdf()
+            if sumatra and sumatra.exists():
+                return print_pdf_with_sumatra(path)
+        
+        # Για άλλα αρχεία, χρησιμοποιήστε την standard μέθοδο
+        os.startfile(str(path), "print")
+        return True
+    except Exception as e:
+        print(f"Σφάλμα εκτύπωσης: {e}")
+        return False
+
+
+def print_with_dialog(path: Path, parent=None) -> bool:
+    """Εκτύπωση με διάλογο επιλογής εκτυπωτή και προεπισκόπηση."""
+    try:
+        # Φόρτωση PDF σε QTextDocument για προεπισκόπηση
+        doc = QTextDocument()
+        
+        if path.suffix.lower() == '.pdf':
+            # Για PDF, χρησιμοποιούμε SumatraPDF για αξιόπιστη εκτύπωση
+            return print_pdf_with_sumatra(path)
+        else:
+            # Για άλλα αρχεία, απλό άνοιγμα
+            import os
+            os.startfile(str(path))
+            return True
+            
+    except Exception as e:
+        print(f"Σφάλμα εκτύπωσης με διάλογο: {e}")
+        # Πτώση πίσω σε απλή μέθοδο
+        return print_file_windows(path)
+
+
+# ----------------------------- Styles -----------------------------
+DARK_STYLE = """
+* { 
+    font-family: 'Segoe UI', 'Arial'; 
+    font-size: 13px; 
+}
+QWidget { 
+    background-color: #121212; 
+    color: #E6E1E5; 
+}
+QFrame#card { 
+    background-color: #1E1E1E; 
+    border-radius: 12px; 
+    padding: 8px;
+}
+QFrame#subcard { 
+    background-color: #181818; 
+    border-radius: 10px; 
+    border: 1px solid #2A2A2A;
+    padding: 6px;
+}
+QLabel#title { 
+    font-size: 18px; 
+    font-weight: 600; 
+    padding: 2px 0px;
+}
+QLabel#subtitle { 
+    font-size: 14px; 
+    font-weight: 600; 
+    padding: 2px 0px;
+}
+QLabel#muted { 
+    color: #A1A1A1; 
+    padding: 2px 0px;
+}
+QLabel#chip {
+    background-color: #2A2A2A;
+    border: 1px solid #3A3A3A;
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin: 2px;
+}
+QLabel#chipGood {
+    background-color: #19311f;
+    border: 1px solid #2c6f3a;
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin: 2px;
+}
+QLabel#chipBad {
+    background-color: #331919;
+    border: 1px solid #7a2b2b;
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin: 2px;
+}
+QLineEdit, QTextEdit, QComboBox {
+    background-color: #2A2A2A;
+    border-radius: 8px;
+    padding: 6px 8px;
+    border: 1px solid #3A3A3A;
+    margin: 2px 0px;
+    min-height: 24px;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus { 
+    border: 2px solid #6750A4; 
+}
+QPushButton {
+    background-color: #6750A4;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-weight: 600;
+    margin: 2px;
+    min-height: 32px;
+}
+QPushButton:hover { background-color: #7F67BE; }
+QPushButton#secondary { 
+    background-color: #2A2A2A; 
+}
+QPushButton#secondary:hover { background-color: #333333; }
+
+QLabel#drop {
+    border: 2px dashed #6750A4;
+    border-radius: 12px;
+    padding: 14px;
+    color: #B69DF8;
+    margin: 4px;
+}
+QTabWidget::pane { 
+    border: 0px; 
+}
+QTabBar::tab {
+    background: #1E1E1E;
+    padding: 8px 12px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    margin-right: 4px;
+    min-width: 100px;
+}
+QTabBar::tab:selected { 
+    background: #2A2A2A; 
+}
+QTableWidget {
+    background-color: #1E1E1E;
+    border-radius: 8px;
+    gridline-color: #333;
+    border: 1px solid #2a2a2a;
+    padding: 2px;
+    margin: 0px;
+}
+QTableWidget::item {
+    padding: 4px 6px;
+    border: none;
+    margin: 0px;
+}
+QHeaderView::section {
+    background-color: #2A2A2A;
+    padding: 6px 8px;
+    border: 0px;
+    color: #E6E1E5;
+    font-weight: 600;
+}
+QListWidget {
+    background-color: #1E1E1E;
+    border-radius: 8px;
+    border: 1px solid #2a2a2a;
+    padding: 2px;
+    margin: 0px;
+}
+QListWidget::item {
+    padding: 4px 6px;
+    border-bottom: 1px solid #2a2a2a;
+    margin: 0px;
+}
+QListWidget::item:selected {
+    background-color: #6750A4;
+}
+
+/* Switch style (QCheckBox) */
+QCheckBox#themeSwitch::indicator {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: #3A3A3A;
+    border: 1px solid #5A5A5A;
+}
+QCheckBox#themeSwitch::indicator:checked {
+    background: #6750A4;
+    border: 1px solid #7F67BE;
+}
+QCheckBox#themeSwitch { padding: 0px; }
+QCheckBox {
+    spacing: 6px;
+    padding: 2px;
+}
+
+/* Scrollbar styling */
+QScrollBar:vertical {
+    border: none;
+    background: #1E1E1E;
+    width: 10px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: #6750A4;
+    border-radius: 5px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #7F67BE;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0px;
+}
+QScrollBar:horizontal {
+    border: none;
+    background: #1E1E1E;
+    height: 10px;
+    margin: 0px;
+}
+QScrollBar::handle:horizontal {
+    background: #6750A4;
+    border-radius: 5px;
+    min-width: 20px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #7F67BE;
+}
+"""
+
+LIGHT_STYLE = """
+* { 
+    font-family: 'Segoe UI', 'Arial'; 
+    font-size: 13px; 
+}
+QWidget { 
+    background-color: #F7F7FB; 
+    color: #1A1A1A; 
+}
+QFrame#card { 
+    background-color: #FFFFFF; 
+    border-radius: 12px; 
+    border: 1px solid #E6E6F0;
+    padding: 8px;
+}
+QFrame#subcard { 
+    background-color: #FFFFFF; 
+    border-radius: 10px; 
+    border: 1px solid #E6E6F0;
+    padding: 6px;
+}
+QLabel#title { 
+    font-size: 18px; 
+    font-weight: 600; 
+    padding: 2px 0px;
+}
+QLabel#subtitle { 
+    font-size: 14px; 
+    font-weight: 600; 
+    padding: 2px 0px;
+}
+QLabel#muted { 
+    color: #585A61; 
+    padding: 2px 0px;
+}
+QLabel#chip {
+    background-color: #F2F2F7;
+    border: 1px solid #E6E6F0;
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin: 2px;
+}
+QLabel#chipGood {
+    background-color: #e7f6ea;
+    border: 1px solid #bfe7c8;
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin: 2px;
+}
+QLabel#chipBad {
+    background-color: #fdeaea;
+    border: 1px solid #f2bcbc;
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin: 2px;
+}
+QLineEdit, QTextEdit, QComboBox {
+    background-color: #FFFFFF;
+    border-radius: 8px;
+    padding: 6px 8px;
+    border: 1px solid #D7D7E2;
+    margin: 2px 0px;
+    min-height: 24px;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus { 
+    border: 2px solid #6750A4; 
+}
+QPushButton {
+    background-color: #6750A4;
+    color: #FFFFFF;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-weight: 600;
+    margin: 2px;
+    min-height: 32px;
+}
+QPushButton:hover { background-color: #7F67BE; }
+QPushButton#secondary { 
+    background-color: #F2F2F7; 
+    color: #1A1A1A; 
+}
+QPushButton#secondary:hover { background-color: #E9E9F2; }
+
+QLabel#drop {
+    border: 2px dashed #6750A4;
+    border-radius: 12px;
+    padding: 14px;
+    color: #3B2A6B;
+    margin: 4px;
+}
+QTabWidget::pane { 
+    border: 0px; 
+}
+QTabBar::tab {
+    background: #FFFFFF;
+    padding: 8px 12px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    margin-right: 4px;
+    border: 1px solid #E6E6F0;
+    border-bottom: 0px;
+    min-width: 100px;
+}
+QTabBar::tab:selected { 
+    background: #F2F2F7; 
+}
+QTableWidget {
+    background-color: #FFFFFF;
+    border-radius: 8px;
+    gridline-color: #E6E6F0;
+    border: 1px solid #E6E6F0;
+    padding: 2px;
+    margin: 0px;
+}
+QTableWidget::item {
+    padding: 4px 6px;
+    border: none;
+    margin: 0px;
+}
+QHeaderView::section {
+    background-color: #F2F2F7;
+    padding: 6px 8px;
+    border: 0px;
+    color: #1A1A1A;
+    font-weight: 600;
+}
+QListWidget {
+    background-color: #FFFFFF;
+    border-radius: 8px;
+    border: 1px solid #E6E6F0;
+    padding: 2px;
+    margin: 0px;
+}
+QListWidget::item {
+    padding: 4px 6px;
+    border-bottom: 1px solid #E6E6F0;
+    margin: 0px;
+}
+QListWidget::item:selected {
+    background-color: #6750A4;
+    color: white;
+}
+
+/* Switch style (QCheckBox) */
+QCheckBox#themeSwitch::indicator {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: #D7D7E2;
+    border: 1px solid #C7C7D4;
+}
+QCheckBox#themeSwitch::indicator:checked {
+    background: #6750A4;
+    border: 1px solid #7F67BE;
+}
+QCheckBox#themeSwitch { padding: 0px; }
+QCheckBox {
+    spacing: 6px;
+    padding: 2px;
+}
+
+/* Scrollbar styling */
+QScrollBar:vertical {
+    border: none;
+    background: #F2F2F7;
+    width: 10px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: #6750A4;
+    border-radius: 5px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #7F67BE;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0px;
+}
+QScrollBar:horizontal {
+    border: none;
+    background: #F2F2F7;
+    height: 10px;
+    margin: 0px;
+}
+QScrollBar::handle:horizontal {
+    background: #6750A4;
+    border-radius: 5px;
+    min-width: 20px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #7F67BE;
+}
+"""
 
 
 # ----------------------------- Excel Schema -----------------------------
@@ -290,7 +610,6 @@ def safe_float(s: str) -> float:
 def sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-# ✅ FIX: fail-safe ώστε να μην κρασάρει αν το audit file είναι locked/IO error
 def audit_log(user: str, action: str, customer_id: Optional[int] = None, details: str = "") -> None:
     try:
         file_exists = AUDIT_PATH.exists()
@@ -408,7 +727,6 @@ def set_clients_root(path: str) -> None:
 
 
 # ----------------------------- Storage: Excel (with migration) -----------------------------
-# ✅ FIX: hardening για corrupted/locked, backup, και sheet missing
 def ensure_excel() -> None:
     try:
         if not EXCEL_PATH.exists():
@@ -440,7 +758,6 @@ def ensure_excel() -> None:
             wb.save(EXCEL_PATH)
 
     except Exception:
-        # Αν το Excel είναι corrupted/περίεργο: κάνε backup και φτιάξε νέο, χωρίς crash στο startup
         try:
             backup = EXCEL_PATH.with_name(f"clients_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
             if EXCEL_PATH.exists():
@@ -454,7 +771,6 @@ def ensure_excel() -> None:
         ws.append(HEADERS)
         wb.save(EXCEL_PATH)
 
-# ✅ FIX: καθαρό μήνυμα όταν δεν ανοίγει (π.χ. locked από Excel)
 def open_ws():
     ensure_excel()
     try:
@@ -561,14 +877,6 @@ def open_in_explorer(path: Path) -> None:
     except Exception:
         pass
 
-def print_file_windows(path: Path) -> bool:
-    try:
-        import os
-        os.startfile(str(path), "print")
-        return True
-    except Exception:
-        return False
-
 
 # ----------------------------- Validators / Limits -----------------------------
 def set_digits_only(line: QLineEdit, max_len: int, allow_empty=True):
@@ -582,6 +890,56 @@ def set_phone_validator(line: QLineEdit, max_len: int = 15):
     line.setMaxLength(max_len)
     rx = QRegularExpression(r"^[0-9+\-\s]{0," + str(max_len) + r"}$")
     line.setValidator(QRegularExpressionValidator(rx))
+
+
+# ----------------------------- Custom Scroll Area -----------------------------
+class ResponsiveScrollArea(QScrollArea):
+    """ScrollArea που δεν έχει ποτέ horizontal scroll και είναι responsive."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setFrameShape(QFrame.NoFrame)
+        
+    def setWidget(self, widget):
+        super().setWidget(widget)
+        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+
+# ----------------------------- Scrollable Dialog -----------------------------
+class ScrollableDialog(QDialog):
+    """Dialog με scroll area για περιεχόμενο που δεν χωράει στην οθόνη."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # Κύριο layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Scroll area
+        self.scroll_area = ResponsiveScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        
+        # Widget περιεχομένου
+        self.content_widget = QWidget()
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
+        self.content_layout.setSpacing(15)
+        
+        self.scroll_area.setWidget(self.content_widget)
+        main_layout.addWidget(self.scroll_area)
+        
+    def addWidget(self, widget):
+        self.content_layout.addWidget(widget)
+        
+    def addLayout(self, layout):
+        self.content_layout.addLayout(layout)
+        
+    def addStretch(self, stretch=0):
+        self.content_layout.addStretch(stretch)
 
 
 # ----------------------------- UI Components -----------------------------
@@ -614,8 +972,8 @@ class CustomerCardWidget(QFrame):
         self._folder_path: Optional[Path] = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(10)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
 
         self.lbl_title = QLabel("Επέλεξε πελάτη")
         self.lbl_title.setObjectName("title")
@@ -627,6 +985,7 @@ class CustomerCardWidget(QFrame):
         root.addWidget(self.lbl_sub)
 
         chips_row = QHBoxLayout()
+        chips_row.setSpacing(6)
         self.ch_id = QLabel("ID: -"); self.ch_id.setObjectName("chip")
         self.ch_balance = QLabel("Υπόλοιπο: -"); self.ch_balance.setObjectName("chip")
         self.ch_files = QLabel("Αρχεία: -"); self.ch_files.setObjectName("chip")
@@ -642,9 +1001,9 @@ class CustomerCardWidget(QFrame):
         info = QFrame()
         info.setObjectName("subcard")
         g = QGridLayout(info)
-        g.setContentsMargins(12, 12, 12, 12)
-        g.setHorizontalSpacing(10)
-        g.setVerticalSpacing(8)
+        g.setContentsMargins(10, 10, 10, 10)
+        g.setHorizontalSpacing(8)
+        g.setVerticalSpacing(6)
 
         self.v_name = QLabel("-")
         self.v_phone = QLabel("-")
@@ -657,6 +1016,7 @@ class CustomerCardWidget(QFrame):
 
         for w in (self.v_name, self.v_phone, self.v_afm, self.v_amka, self.v_ama, self.v_service, self.v_date, self.v_payment):
             w.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            w.setWordWrap(True)
 
         g.addWidget(QLabel("Ονοματεπώνυμο:"), 0, 0); g.addWidget(self.v_name, 0, 1)
         g.addWidget(QLabel("Τηλέφωνο:"),      1, 0); g.addWidget(self.v_phone, 1, 1)
@@ -676,14 +1036,15 @@ class CustomerCardWidget(QFrame):
         root.addWidget(QLabel("Αίτημα / Σημειώσεις (προεπισκόπηση):"))
         self.notes_preview = QTextEdit()
         self.notes_preview.setReadOnly(True)
-        self.notes_preview.setMinimumHeight(90)
+        self.notes_preview.setMinimumHeight(70)
+        self.notes_preview.setMaximumHeight(100)
         root.addWidget(self.notes_preview)
 
         files_box = QFrame()
         files_box.setObjectName("subcard")
         vb = QVBoxLayout(files_box)
-        vb.setContentsMargins(12, 12, 12, 12)
-        vb.setSpacing(8)
+        vb.setContentsMargins(10, 10, 10, 10)
+        vb.setSpacing(6)
 
         top = QHBoxLayout()
         self.lbl_files_title = QLabel("Αρχεία πελάτη")
@@ -696,10 +1057,12 @@ class CustomerCardWidget(QFrame):
         vb.addLayout(top)
 
         self.list_files = QListWidget()
-        self.list_files.setMinimumHeight(140)
+        self.list_files.setMinimumHeight(100)
+        self.list_files.setMaximumHeight(150)
         vb.addWidget(self.list_files)
 
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
         self.btn_open_folder = QPushButton("Άνοιγμα φακέλου")
         self.btn_open_folder.setObjectName("secondary")
         self.btn_open_file = QPushButton("Άνοιγμα επιλεγμένου")
@@ -831,11 +1194,11 @@ class LoginWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Client Manager v1 – Σύνδεση")
-        self.resize(460, 290)
+        self.resize(440, 260)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
-        root.setSpacing(14)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(12)
 
         title = QLabel("Σύνδεση")
         title.setObjectName("title")
@@ -848,7 +1211,7 @@ class LoginWindow(QWidget):
         card = QFrame()
         card.setObjectName("card")
         c = QVBoxLayout(card)
-        c.setContentsMargins(16, 16, 16, 16)
+        c.setContentsMargins(14, 14, 14, 14)
         c.setSpacing(10)
 
         self.in_user = QLineEdit()
@@ -859,6 +1222,7 @@ class LoginWindow(QWidget):
         self.in_pass.setEchoMode(QLineEdit.Password)
 
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
         self.btn_login = QPushButton("Σύνδεση")
         self.btn_login.clicked.connect(self.do_login)
 
@@ -893,13 +1257,10 @@ class LoginWindow(QWidget):
             QMessageBox.critical(self, "Σφάλμα", f"{e}\n\n{traceback.format_exc()}")
 
     def change_admin_password(self):
-        dlg = QDialog(self)
+        dlg = ScrollableDialog(self)
         dlg.setWindowTitle("Αλλαγή κωδικού admin")
-        dlg.resize(440, 240)
-        lay = QVBoxLayout(dlg)
-        lay.setContentsMargins(16, 16, 16, 16)
-        lay.setSpacing(10)
-
+        dlg.resize(400, 200)
+        
         p1 = QLineEdit(); p1.setPlaceholderText("Νέος κωδικός"); p1.setEchoMode(QLineEdit.Password)
         p2 = QLineEdit(); p2.setPlaceholderText("Επανάληψη νέου κωδικού"); p2.setEchoMode(QLineEdit.Password)
 
@@ -915,19 +1276,19 @@ class LoginWindow(QWidget):
 
         btn.clicked.connect(save)
 
-        lay.addWidget(QLabel("Θέσε νέο κωδικό για τον χρήστη 'admin'."))
-        lay.addWidget(p1); lay.addWidget(p2); lay.addWidget(btn)
+        dlg.addWidget(QLabel("Θέσε νέο κωδικό για τον χρήστη 'admin'."))
+        dlg.addWidget(p1); dlg.addWidget(p2); dlg.addWidget(btn)
         dlg.exec()
 
 
 # ----------------------------- Customer Dialog -----------------------------
-class CustomerDialog(QDialog):
+class CustomerDialog(ScrollableDialog):
     def __init__(self, current_user: str, excel_row_index: int):
         super().__init__()
         self.current_user = current_user
         self.row_index = excel_row_index
         self.setWindowTitle("Καρτέλα πελάτη")
-        self.resize(1000, 720)
+        self.resize(1000, 700)
 
         wb, ws = open_ws()
         self.wb = wb
@@ -935,19 +1296,16 @@ class CustomerDialog(QDialog):
         self.rec = row_to_record(ws, excel_row_index)
         self.customer_id = int(self.rec.get("ID") or 0)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(12)
-
         title = QLabel(f"Πελάτης #{self.customer_id}")
         title.setObjectName("title")
-        root.addWidget(title)
+        self.addWidget(title)
 
         subtitle = QLabel(str(self.rec.get("Name") or ""))
         subtitle.setObjectName("muted")
-        root.addWidget(subtitle)
+        self.addWidget(subtitle)
 
         chips = QHBoxLayout()
+        chips.setSpacing(6)
         self.ch_phone = QLabel(f"Τηλέφωνο: {self.rec.get('Phone')}")
         self.ch_phone.setObjectName("chip")
         self.ch_balance = QLabel(f"Υπόλοιπο: {self.rec.get('Balance')}")
@@ -958,14 +1316,14 @@ class CustomerDialog(QDialog):
         chips.addWidget(self.ch_balance)
         chips.addWidget(self.ch_folder)
         chips.addStretch(1)
-        root.addLayout(chips)
+        self.addLayout(chips)
 
         extra_card = QFrame()
         extra_card.setObjectName("card")
         extra_l = QGridLayout(extra_card)
-        extra_l.setContentsMargins(14, 14, 14, 14)
+        extra_l.setContentsMargins(12, 12, 12, 12)
         extra_l.setHorizontalSpacing(10)
-        extra_l.setVerticalSpacing(10)
+        extra_l.setVerticalSpacing(8)
 
         self.ed_afm = QLineEdit(str(self.rec.get("AFM") or ""))
         self.ed_amka = QLineEdit(str(self.rec.get("AMKA") or ""))
@@ -979,21 +1337,29 @@ class CustomerDialog(QDialog):
         extra_l.addWidget(QLabel("ΑΜΚΑ:"), 1, 0); extra_l.addWidget(self.ed_amka, 1, 1)
         extra_l.addWidget(QLabel("ΑΜΑ:"),  2, 0); extra_l.addWidget(self.ed_ama,  2, 1)
 
-        root.addWidget(QLabel("Στοιχεία"))
-        root.addWidget(extra_card)
+        self.addWidget(QLabel("Στοιχεία"))
+        self.addWidget(extra_card)
 
-        root.addWidget(QLabel("Αίτημα / Σημειώσεις"))
+        self.addWidget(QLabel("Αίτημα / Σημειώσεις"))
         self.notes = QTextEdit()
         self.notes.setText(str(self.rec.get("RequestNotes") or ""))
-        root.addWidget(self.notes)
+        self.notes.setMinimumHeight(80)
+        self.addWidget(self.notes)
 
-        files_row = QHBoxLayout()
+        files_card = QFrame()
+        files_card.setObjectName("card")
+        files_layout = QVBoxLayout(files_card)
+        files_layout.setContentsMargins(12, 12, 12, 12)
+        files_layout.setSpacing(8)
+        
+        files_layout.addWidget(QLabel("Αρχεία πελάτη"))
+        
         self.list_files = QListWidget()
-        self.list_files.setMinimumHeight(170)
-        self.list_files.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        files_row.addWidget(self.list_files, 2)
+        self.list_files.setMinimumHeight(120)
+        files_layout.addWidget(self.list_files)
 
-        btns = QVBoxLayout()
+        files_btn_row = QHBoxLayout()
+        files_btn_row.setSpacing(6)
         self.btn_open_folder = QPushButton("Άνοιγμα φακέλου")
         self.btn_open_folder.setObjectName("secondary")
         self.btn_open_folder.clicked.connect(self.open_folder)
@@ -1005,22 +1371,30 @@ class CustomerDialog(QDialog):
         self.btn_print = QPushButton("Εκτύπωση επιλεγμένου")
         self.btn_print.clicked.connect(self.print_selected_file)
 
-        btns.addWidget(self.btn_open_folder)
-        btns.addWidget(self.btn_open_file)
-        btns.addWidget(self.btn_print)
-        btns.addStretch(1)
-        files_row.addLayout(btns, 1)
+        files_btn_row.addWidget(self.btn_open_folder)
+        files_btn_row.addWidget(self.btn_open_file)
+        files_btn_row.addWidget(self.btn_print)
+        files_btn_row.addStretch(1)
+        files_layout.addLayout(files_btn_row)
+        
+        self.addWidget(files_card)
 
-        root.addWidget(QLabel("Αρχεία πελάτη"))
-        root.addLayout(files_row)
-
-        root.addWidget(QLabel("Ιστορικό (audit log)"))
+        audit_card = QFrame()
+        audit_card.setObjectName("card")
+        audit_layout = QVBoxLayout(audit_card)
+        audit_layout.setContentsMargins(12, 12, 12, 12)
+        audit_layout.setSpacing(8)
+        
+        audit_layout.addWidget(QLabel("Ιστορικό (audit log)"))
         self.audit_box = QTextEdit()
         self.audit_box.setReadOnly(True)
-        self.audit_box.setMinimumHeight(190)
-        root.addWidget(self.audit_box)
+        self.audit_box.setMinimumHeight(150)
+        audit_layout.addWidget(self.audit_box)
+        
+        self.addWidget(audit_card)
 
         bottom = QHBoxLayout()
+        bottom.setSpacing(8)
         self.btn_refresh = QPushButton("Ανανέωση")
         self.btn_refresh.setObjectName("secondary")
         self.btn_refresh.clicked.connect(self.refresh_views)
@@ -1031,7 +1405,7 @@ class CustomerDialog(QDialog):
         bottom.addWidget(self.btn_save)
         bottom.addWidget(self.btn_refresh)
         bottom.addStretch(1)
-        root.addLayout(bottom)
+        self.addLayout(bottom)
 
         self.refresh_views()
 
@@ -1090,7 +1464,7 @@ class CustomerDialog(QDialog):
         p = self.selected_file_path()
         if not p:
             return
-        ok = print_file_windows(p)
+        ok = print_with_dialog(p, self)
         if not ok:
             QMessageBox.information(self, "Εκτύπωση", "Δεν μπόρεσα να κάνω άμεση εκτύπωση. Θα ανοίξω το αρχείο.")
             open_in_explorer(p)
@@ -1130,8 +1504,8 @@ class MainWindow(QWidget):
         self.user = current_user
         self.setWindowTitle("Client Manager v1")
 
-        self.setMinimumSize(860, 560)
-        self.resize(1220, 820)
+        self.setMinimumSize(900, 600)
+        self.resize(1200, 750)
 
         self.pending_files: List[str] = []
         self.last_saved_customer_id: Optional[int] = None
@@ -1139,16 +1513,19 @@ class MainWindow(QWidget):
 
         self.search_selected_excel_row: Optional[int] = None
 
+        # Κύριο layout
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(12)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
 
+        # Header
         header = QHBoxLayout()
         title = QLabel("Client Manager")
         title.setObjectName("title")
 
-        self.lbl_status = QLabel(f"Συνδεδεμένος: {self.user}   |   Δεδομένα: {DATA_DIR}")
+        self.lbl_status = QLabel(f"Συνδεδεμένος: {self.user}")
         self.lbl_status.setObjectName("muted")
+        self.lbl_status.setWordWrap(True)
 
         header.addWidget(title)
         header.addStretch(1)
@@ -1167,16 +1544,26 @@ class MainWindow(QWidget):
         header.addWidget(self.lbl_status)
         root.addLayout(header)
 
+        # Κύριο tab widget
         self.tabs = QTabWidget()
         root.addWidget(self.tabs)
 
-        self.tab_new_scroll, self.tab_new_inner = self.make_scroll_tab()
-        self.tab_search_scroll, self.tab_search_inner = self.make_scroll_tab()
-        self.tab_dashboard_scroll, self.tab_dashboard_inner = self.make_scroll_tab()
+        # Δημιουργία tabs με responsive scroll areas
+        self.tab_new = ResponsiveScrollArea()
+        self.tab_new_inner = QWidget()
+        self.tab_new.setWidget(self.tab_new_inner)
+        
+        self.tab_search = ResponsiveScrollArea()
+        self.tab_search_inner = QWidget()
+        self.tab_search.setWidget(self.tab_search_inner)
+        
+        self.tab_dashboard = ResponsiveScrollArea()
+        self.tab_dashboard_inner = QWidget()
+        self.tab_dashboard.setWidget(self.tab_dashboard_inner)
 
-        self.tabs.addTab(self.tab_new_scroll, "Νέος πελάτης")
-        self.tabs.addTab(self.tab_search_scroll, "Αναζήτηση")
-        self.tabs.addTab(self.tab_dashboard_scroll, "Πίνακας")
+        self.tabs.addTab(self.tab_new, "Νέος πελάτης")
+        self.tabs.addTab(self.tab_search, "Αναζήτηση")
+        self.tabs.addTab(self.tab_dashboard, "Πίνακας")
 
         self.build_tab_new(self.tab_new_inner)
         self.build_tab_search(self.tab_search_inner)
@@ -1186,14 +1573,6 @@ class MainWindow(QWidget):
 
         self.refresh_next_id()
         self.refresh_dashboard()
-
-    def make_scroll_tab(self):
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        inner = QWidget()
-        inner.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        scroll.setWidget(inner)
-        return scroll, inner
 
     def apply_theme(self, theme: str):
         app = QApplication.instance()
@@ -1219,44 +1598,55 @@ class MainWindow(QWidget):
     # ---------------- Νέος Πελάτης ----------------
     def build_tab_new(self, parent: QWidget):
         lay = QVBoxLayout(parent)
-        lay.setSpacing(12)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(10)
 
-        settings_card = QFrame(); settings_card.setObjectName("card")
-        sc = QVBoxLayout(settings_card); sc.setContentsMargins(14, 14, 14, 14); sc.setSpacing(10)
+        # Settings card
+        settings_card = QFrame()
+        settings_card.setObjectName("card")
+        sc = QVBoxLayout(settings_card)
+        sc.setContentsMargins(12, 12, 12, 12)
+        sc.setSpacing(8)
 
         sc.addWidget(QLabel("Ρυθμίσεις αποθήκευσης αρχείων"))
 
         row_root = QHBoxLayout()
+        row_root.setSpacing(8)
         self.in_clients_root = QLineEdit(str(get_clients_root()))
         self.in_clients_root.setPlaceholderText("Ρίζα φακέλων πελατών (π.χ. D:\\Clients)")
-        self.in_clients_root.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         btn_browse_root = QPushButton("Επιλογή…")
         btn_browse_root.setObjectName("secondary")
         btn_browse_root.clicked.connect(self.browse_clients_root)
 
-        btn_save_root = QPushButton("Αποθήκευση ρίζας")
+        btn_save_root = QPushButton("Αποθήκευση")
         btn_save_root.setObjectName("secondary")
         btn_save_root.clicked.connect(self.save_clients_root)
 
-        row_root.addWidget(self.in_clients_root, 6)
-        row_root.addWidget(btn_browse_root, 0)
-        row_root.addWidget(btn_save_root, 0)
+        row_root.addWidget(self.in_clients_root, 4)
+        row_root.addWidget(btn_browse_root, 1)
+        row_root.addWidget(btn_save_root, 1)
         sc.addLayout(row_root)
 
         hint = QLabel("Σημαντικό: Αν αλλάξεις ρίζα μετά, οι παλιοί πελάτες μπορεί να δείχνουν σε παλιό FolderPath.")
         hint.setObjectName("muted")
+        hint.setWordWrap(True)
         sc.addWidget(hint)
 
         lay.addWidget(settings_card)
 
-        card = QFrame(); card.setObjectName("card")
-        c = QVBoxLayout(card); c.setContentsMargins(14, 14, 14, 14); c.setSpacing(10)
+        # Κύριο φόρμα
+        form_card = QFrame()
+        form_card.setObjectName("card")
+        c = QVBoxLayout(form_card)
+        c.setContentsMargins(12, 12, 12, 12)
+        c.setSpacing(8)
 
+        # Header row
         top = QHBoxLayout()
+        top.setSpacing(8)
         self.service_type = QComboBox()
         self.service_type.addItems(["ΚΕΠ", "Νομικά"])
-        self.service_type.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self.lbl_next_id = QLabel("Επόμενο ID: -")
         self.lbl_next_id.setObjectName("chip")
@@ -1270,46 +1660,52 @@ class MainWindow(QWidget):
         top.addStretch(1)
         top.addWidget(QLabel("Ημερομηνία:"))
         top.addWidget(self.lbl_date)
-        top.addSpacing(10)
+        top.addSpacing(8)
         top.addWidget(self.lbl_next_id)
         c.addLayout(top)
 
+        # Βασικά στοιχεία
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(10)
+        grid.setVerticalSpacing(8)
 
-        self.in_name = QLineEdit(); self.in_name.setPlaceholderText("Ονοματεπώνυμο")
-        self.in_phone = QLineEdit(); self.in_phone.setPlaceholderText("Τηλέφωνο")
-        self.in_afm = QLineEdit(); self.in_afm.setPlaceholderText("ΑΦΜ (9 ψηφία)")
-        self.in_amka = QLineEdit(); self.in_amka.setPlaceholderText("ΑΜΚΑ (11 ψηφία)")
-        self.in_ama = QLineEdit(); self.in_ama.setPlaceholderText("ΑΜΑ (προαιρετικό)")
+        self.in_name = QLineEdit()
+        self.in_name.setPlaceholderText("Ονοματεπώνυμο")
+        self.in_phone = QLineEdit()
+        self.in_phone.setPlaceholderText("Τηλέφωνο")
+        self.in_afm = QLineEdit()
+        self.in_afm.setPlaceholderText("ΑΦΜ (9 ψηφία)")
+        self.in_amka = QLineEdit()
+        self.in_amka.setPlaceholderText("ΑΜΚΑ (11 ψηφία)")
+        self.in_ama = QLineEdit()
+        self.in_ama.setPlaceholderText("ΑΜΑ (προαιρετικό)")
 
         set_phone_validator(self.in_phone, 15)
         set_digits_only(self.in_afm, 9)
         set_digits_only(self.in_amka, 11)
         self.in_ama.setMaxLength(20)
 
-        for w in (self.in_name, self.in_phone, self.in_afm, self.in_amka, self.in_ama):
-            w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
+        # Responsive grid layout
         grid.addWidget(QLabel("Ονοματεπώνυμο:"), 0, 0)
-        grid.addWidget(self.in_name,             0, 1, 1, 3)
-
-        grid.addWidget(QLabel("Τηλέφωνο:"),      1, 0)
-        grid.addWidget(self.in_phone,            1, 1)
-
-        grid.addWidget(QLabel("ΑΦΜ:"),           1, 2)
-        grid.addWidget(self.in_afm,              1, 3)
-
-        grid.addWidget(QLabel("ΑΜΚΑ:"),          2, 0)
-        grid.addWidget(self.in_amka,             2, 1)
-
-        grid.addWidget(QLabel("ΑΜΑ:"),           2, 2)
-        grid.addWidget(self.in_ama,              2, 3)
+        grid.addWidget(self.in_name, 0, 1, 1, 3)
+        
+        grid.addWidget(QLabel("Τηλέφωνο:"), 1, 0)
+        grid.addWidget(self.in_phone, 1, 1)
+        
+        grid.addWidget(QLabel("ΑΦΜ:"), 1, 2)
+        grid.addWidget(self.in_afm, 1, 3)
+        
+        grid.addWidget(QLabel("ΑΜΚΑ:"), 2, 0)
+        grid.addWidget(self.in_amka, 2, 1)
+        
+        grid.addWidget(QLabel("ΑΜΑ:"), 2, 2)
+        grid.addWidget(self.in_ama, 2, 3)
 
         c.addLayout(grid)
 
+        # Taxisnet
         row_tax = QHBoxLayout()
+        row_tax.setSpacing(8)
         self.cb_has_taxis = QComboBox()
         self.cb_has_taxis.addItems(["Όχι", "Ναι"])
         self.cb_has_taxis.currentTextChanged.connect(self.on_has_taxis_changed)
@@ -1320,14 +1716,16 @@ class MainWindow(QWidget):
         c.addLayout(row_tax)
 
         self.taxis_box = QFrame()
-        self.taxis_box.setObjectName("card")
+        self.taxis_box.setObjectName("subcard")
         tb = QGridLayout(self.taxis_box)
-        tb.setContentsMargins(12, 12, 12, 12)
-        tb.setHorizontalSpacing(10)
-        tb.setVerticalSpacing(10)
+        tb.setContentsMargins(10, 10, 10, 10)
+        tb.setHorizontalSpacing(8)
+        tb.setVerticalSpacing(6)
 
-        self.in_taxis_user = QLineEdit(); self.in_taxis_user.setPlaceholderText("Username Taxisnet")
-        self.in_taxis_pass = QLineEdit(); self.in_taxis_pass.setPlaceholderText("Password Taxisnet")
+        self.in_taxis_user = QLineEdit()
+        self.in_taxis_user.setPlaceholderText("Username Taxisnet")
+        self.in_taxis_pass = QLineEdit()
+        self.in_taxis_pass.setPlaceholderText("Password Taxisnet")
         self.in_taxis_pass.setEchoMode(QLineEdit.Password)
 
         self.in_taxis_user.setMaxLength(64)
@@ -1341,27 +1739,35 @@ class MainWindow(QWidget):
         self.taxis_box.setVisible(False)
         c.addWidget(self.taxis_box)
 
+        # Status options
         row3 = QHBoxLayout()
-        self.in_kleid = QComboBox(); self.in_kleid.addItems(["Επιβεβαιώθηκε", "Απορρίφθηκε"])
-        self.in_amka_status = QComboBox(); self.in_amka_status.addItems(["Επιβεβαιώθηκε", "Απορρίφθηκε"])
-        self.in_aporr = QComboBox(); self.in_aporr.addItems(["Όχι", "Ναι"])
-        for w in (self.in_kleid, self.in_amka_status, self.in_aporr):
-            w.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        row3.setSpacing(8)
+        self.in_kleid = QComboBox()
+        self.in_kleid.addItems(["Επιβεβαιώθηκε", "Απορρίφθηκε"])
+        self.in_amka_status = QComboBox()
+        self.in_amka_status.addItems(["Επιβεβαιώθηκε", "Απορρίφθηκε"])
+        self.in_aporr = QComboBox()
+        self.in_aporr.addItems(["Όχι", "Ναι"])
 
-        row3.addWidget(QLabel("Κλειδάριθμος:")); row3.addWidget(self.in_kleid)
-        row3.addSpacing(10)
-        row3.addWidget(QLabel("ΑΜΚΑ/ΑΜΑ status:")); row3.addWidget(self.in_amka_status)
-        row3.addSpacing(10)
-        row3.addWidget(QLabel("Απόρριψη:")); row3.addWidget(self.in_aporr)
+        row3.addWidget(QLabel("Κλειδάριθμος:"))
+        row3.addWidget(self.in_kleid)
+        row3.addSpacing(8)
+        row3.addWidget(QLabel("ΑΜΚΑ/ΑΜΑ status:"))
+        row3.addWidget(self.in_amka_status)
+        row3.addSpacing(8)
+        row3.addWidget(QLabel("Απόρριψη:"))
+        row3.addWidget(self.in_aporr)
         row3.addStretch(1)
         c.addLayout(row3)
 
+        # Confirmation
         c.addWidget(QLabel("Επιβεβαίωση πριν την αποθήκευση:"))
         self.cb_confirm_data = QCheckBox("Έχω επιβεβαιώσει τα στοιχεία του πελάτη")
         self.cb_confirm_services = QCheckBox("Έχω επιβεβαιώσει υπηρεσίες & τιμές")
         c.addWidget(self.cb_confirm_data)
         c.addWidget(self.cb_confirm_services)
 
+        # Services
         c.addWidget(QLabel("Ενέργειες σήμερα: (διάλεξε τουλάχιστον 1)"))
         actions_grid = QGridLayout()
         actions_grid.setHorizontalSpacing(10)
@@ -1371,35 +1777,36 @@ class MainWindow(QWidget):
         for idx, (name, price) in enumerate(SERVICES):
             cb = QCheckBox(f"{name} ({price})")
             cb.stateChanged.connect(self.recalculate)
-            cb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             self.service_checks.append(cb)
             r = idx // 2
             col = idx % 2
             actions_grid.addWidget(cb, r, col)
         c.addLayout(actions_grid)
 
+        # Payment
         pay = QHBoxLayout()
+        pay.setSpacing(8)
         self.cmb_payment = QComboBox()
         self.cmb_payment.addItems(PAYMENT_METHODS)
-        self.cmb_payment.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self.in_paid = QLineEdit()
         self.in_paid.setPlaceholderText("Πληρώθηκε σήμερα (ποσό)")
         self.in_paid.textChanged.connect(self.recalculate)
-        self.in_paid.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.in_paid.setFixedWidth(220)
+        self.in_paid.setFixedWidth(180)
         self.in_paid.setMaxLength(12)
 
         btn_calc = QPushButton("Υπολογισμός")
         btn_calc.setObjectName("secondary")
         btn_calc.clicked.connect(self.recalculate)
 
-        self.lbl_total = QLabel("Σύνολο: 0.00"); self.lbl_total.setObjectName("chip")
-        self.lbl_balance = QLabel("Υπόλοιπο: 0.00"); self.lbl_balance.setObjectName("chip")
+        self.lbl_total = QLabel("Σύνολο: 0.00")
+        self.lbl_total.setObjectName("chip")
+        self.lbl_balance = QLabel("Υπόλοιπο: 0.00")
+        self.lbl_balance.setObjectName("chip")
 
         pay.addWidget(QLabel("Πληρωμή:"))
         pay.addWidget(self.cmb_payment)
-        pay.addSpacing(10)
+        pay.addSpacing(8)
         pay.addWidget(self.in_paid)
         pay.addWidget(btn_calc)
         pay.addStretch(1)
@@ -1407,13 +1814,17 @@ class MainWindow(QWidget):
         pay.addWidget(self.lbl_balance)
         c.addLayout(pay)
 
+        # Notes
         c.addWidget(QLabel("Αίτημα / Σημειώσεις:"))
         self.in_request = QTextEdit()
         self.in_request.setPlaceholderText("Γράψε το αίτημα του πελάτη / σημειώσεις")
-        self.in_request.setMinimumHeight(90)
+        self.in_request.setMinimumHeight(80)
+        self.in_request.setMaximumHeight(120)
         c.addWidget(self.in_request)
 
+        # Form buttons
         btns = QHBoxLayout()
+        btns.setSpacing(8)
         self.btn_save_customer = QPushButton("Αποθήκευση πελάτη στο Excel")
         self.btn_save_customer.clicked.connect(self.save_customer)
 
@@ -1425,78 +1836,94 @@ class MainWindow(QWidget):
         btns.addWidget(self.btn_open_folder, 1)
         c.addLayout(btns)
 
-        lay.addWidget(card)
+        lay.addWidget(form_card)
 
-        card2 = QFrame(); card2.setObjectName("card")
-        c2 = QVBoxLayout(card2); c2.setContentsMargins(14, 14, 14, 14); c2.setSpacing(10)
+        # Files card
+        files_card = QFrame()
+        files_card.setObjectName("card")
+        c2 = QVBoxLayout(files_card)
+        c2.setContentsMargins(12, 12, 12, 12)
+        c2.setSpacing(8)
 
+        # Scanner folder
         scanner_row = QHBoxLayout()
+        scanner_row.setSpacing(8)
         self.in_scanner = QLineEdit(get_scanner_folder())
         self.in_scanner.setPlaceholderText("Φάκελος scanner (προαιρετικό)")
-        self.in_scanner.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         btn_browse_scanner = QPushButton("Επιλογή…")
         btn_browse_scanner.setObjectName("secondary")
         btn_browse_scanner.clicked.connect(self.browse_scanner_folder)
 
-        btn_set_scanner = QPushButton("Αποθήκευση scanner")
+        btn_set_scanner = QPushButton("Αποθήκευση")
         btn_set_scanner.setObjectName("secondary")
         btn_set_scanner.clicked.connect(self.set_scanner_folder_ui)
 
-        scanner_row.addWidget(self.in_scanner, 6)
-        scanner_row.addWidget(btn_browse_scanner, 0)
-        scanner_row.addWidget(btn_set_scanner, 0)
+        scanner_row.addWidget(self.in_scanner, 4)
+        scanner_row.addWidget(btn_browse_scanner, 1)
+        scanner_row.addWidget(btn_set_scanner, 1)
         c2.addLayout(scanner_row)
 
+        # Drop zone
         c2.addWidget(QLabel("Αρχεία (drag & drop μετά την αποθήκευση πελάτη):"))
         self.drop = DropZone(self.on_files_dropped)
         c2.addWidget(self.drop)
 
+        # File lists
         lists_row = QHBoxLayout()
+        lists_row.setSpacing(10)
 
+        # Pending files
         pending_col = QVBoxLayout()
+        pending_col.setSpacing(4)
         pending_col.addWidget(QLabel("Pending αρχεία"))
         self.list_pending = QListWidget()
-        self.list_pending.setMinimumHeight(120)
+        self.list_pending.setMinimumHeight(100)
         pending_col.addWidget(self.list_pending)
-        lists_row.addLayout(pending_col, 2)
+        lists_row.addLayout(pending_col, 1)
 
+        # Customer files
         folder_col = QVBoxLayout()
+        folder_col.setSpacing(4)
         folder_col.addWidget(QLabel("Αρχεία φακέλου πελάτη"))
         self.list_folder = QListWidget()
-        self.list_folder.setMinimumHeight(120)
+        self.list_folder.setMinimumHeight(100)
         folder_col.addWidget(self.list_folder)
-        lists_row.addLayout(folder_col, 2)
+        lists_row.addLayout(folder_col, 1)
 
+        # Scanner files
         scanner_col = QVBoxLayout()
+        scanner_col.setSpacing(4)
         scanner_col.addWidget(QLabel("Αρχεία scanner"))
         self.list_scanner = QListWidget()
-        self.list_scanner.setMinimumHeight(120)
+        self.list_scanner.setMinimumHeight(100)
         scanner_col.addWidget(self.list_scanner)
-        lists_row.addLayout(scanner_col, 2)
+        lists_row.addLayout(scanner_col, 1)
 
         c2.addLayout(lists_row)
 
+        # File action buttons
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
         btn_pick = QPushButton("Προσθήκη αρχείων…")
         btn_pick.setObjectName("secondary")
         btn_pick.clicked.connect(self.pick_files)
 
-        btn_move_pending = QPushButton("Μεταφορά pending → φάκελο πελάτη")
+        btn_move_pending = QPushButton("Μεταφορά pending")
         btn_move_pending.clicked.connect(self.move_pending_to_customer)
 
-        btn_move_scanner = QPushButton("Μεταφορά επιλεγμένου scanner → φάκελο πελάτη")
+        btn_move_scanner = QPushButton("Μεταφορά scanner")
         btn_move_scanner.setObjectName("secondary")
         btn_move_scanner.clicked.connect(self.move_selected_scanner_to_customer)
 
-        btn_refresh_lists = QPushButton("Ανανέωση λιστών")
+        btn_refresh_lists = QPushButton("Ανανέωση")
         btn_refresh_lists.setObjectName("secondary")
         btn_refresh_lists.clicked.connect(self.refresh_file_lists)
 
-        btn_print = QPushButton("Εκτύπωση επιλεγμένου (φάκελος πελάτη)")
+        btn_print = QPushButton("Εκτύπωση")
         btn_print.clicked.connect(self.print_selected_customer_file)
 
-        btn_confirm_files = QPushButton("Επιβεβαίωση αρχείων")
+        btn_confirm_files = QPushButton("Επιβεβαίωση")
         btn_confirm_files.clicked.connect(self.confirm_files)
 
         btn_row.addWidget(btn_pick)
@@ -1507,7 +1934,7 @@ class MainWindow(QWidget):
         btn_row.addWidget(btn_refresh_lists)
         c2.addLayout(btn_row)
 
-        lay.addWidget(card2)
+        lay.addWidget(files_card)
         lay.addStretch(1)
 
     def browse_clients_root(self):
@@ -1787,8 +2214,9 @@ class MainWindow(QWidget):
         p = self.last_saved_customer_folder / item.text()
         if not p.exists():
             return
-        ok = print_file_windows(p)
+        ok = print_with_dialog(p, self)
         if not ok:
+            QMessageBox.information(self, "Εκτύπωση", "Αποτυχία εκτύπωσης. Θα ανοίξω το αρχείο.")
             open_in_explorer(p)
         if self.last_saved_customer_id is not None:
             audit_log(self.user, "PRINT", self.last_saved_customer_id, p.name)
@@ -1819,18 +2247,24 @@ class MainWindow(QWidget):
     # ---------------- Αναζήτηση ----------------
     def build_tab_search(self, parent: QWidget):
         lay = QVBoxLayout(parent)
-        lay.setSpacing(12)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(10)
 
-        container = QFrame()
-        container.setObjectName("card")
-        c = QVBoxLayout(container)
-        c.setContentsMargins(14, 14, 14, 14)
-        c.setSpacing(10)
+        # Search card
+        search_card = QFrame()
+        search_card.setObjectName("card")
+        c = QVBoxLayout(search_card)
+        c.setContentsMargins(12, 12, 12, 12)
+        c.setSpacing(8)
 
         row = QHBoxLayout()
-        self.q_id = QLineEdit(); self.q_id.setPlaceholderText("ID")
-        self.q_name = QLineEdit(); self.q_name.setPlaceholderText("Όνομα περιέχει…")
-        self.q_phone = QLineEdit(); self.q_phone.setPlaceholderText("Τηλέφωνο περιέχει…")
+        row.setSpacing(8)
+        self.q_id = QLineEdit()
+        self.q_id.setPlaceholderText("ID")
+        self.q_name = QLineEdit()
+        self.q_name.setPlaceholderText("Όνομα περιέχει…")
+        self.q_phone = QLineEdit()
+        self.q_phone.setPlaceholderText("Τηλέφωνο περιέχει…")
 
         btn = QPushButton("Αναζήτηση")
         btn.clicked.connect(self.run_search)
@@ -1838,29 +2272,42 @@ class MainWindow(QWidget):
         row.addWidget(self.q_id, 1)
         row.addWidget(self.q_name, 2)
         row.addWidget(self.q_phone, 2)
-        row.addWidget(btn, 0)
+        row.addWidget(btn, 1)
         c.addLayout(row)
 
+        # Splitter για table και preview
         split = QSplitter(Qt.Horizontal)
         split.setChildrenCollapsible(False)
+        split.setHandleWidth(8)
 
+        # Αριστερό πάνελ (πίνακας)
         left = QFrame()
         left.setObjectName("subcard")
         left_l = QVBoxLayout(left)
-        left_l.setContentsMargins(12, 12, 12, 12)
-        left_l.setSpacing(8)
+        left_l.setContentsMargins(10, 10, 10, 10)
+        left_l.setSpacing(6)
 
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(["Γραμμή", "ID", "Όνομα", "Τηλέφωνο", "Υπόλοιπο", "Αρχεία;", "Ηλικία"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # Set column widths
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        
         self.table.cellDoubleClicked.connect(self.open_selected_customer_dialog)
         self.table.itemSelectionChanged.connect(self.preview_selected_customer)
         left_l.addWidget(self.table)
 
         left_btns = QHBoxLayout()
+        left_btns.setSpacing(6)
         open_btn = QPushButton("Άνοιγμα καρτέλας")
         open_btn.setObjectName("secondary")
         open_btn.clicked.connect(self.open_selected_customer_dialog)
@@ -1874,6 +2321,7 @@ class MainWindow(QWidget):
         left_btns.addStretch(1)
         left_l.addLayout(left_btns)
 
+        # Δεξί πάνελ (preview)
         self.preview_card = CustomerCardWidget()
         self.preview_card.bind_actions(
             on_open_folder=self.search_open_folder,
@@ -1883,12 +2331,10 @@ class MainWindow(QWidget):
 
         split.addWidget(left)
         split.addWidget(self.preview_card)
-        split.setSizes([700, 460])
+        split.setSizes([600, 400])
 
         c.addWidget(split)
-
-        lay.addWidget(container)
-        lay.addStretch(1)
+        lay.addWidget(search_card)
 
         self.preview_card.clear()
 
@@ -1982,8 +2428,9 @@ class MainWindow(QWidget):
         p = self.preview_card.selected_file_path()
         if not p:
             return
-        ok = print_file_windows(p)
+        ok = print_with_dialog(p, self)
         if not ok:
+            QMessageBox.information(self, "Εκτύπωση", "Δεν μπόρεσα να κάνω άμεση εκτύπωση. Θα ανοίξω το αρχείο.")
             open_in_explorer(p)
         if self.preview_card.customer_id is not None:
             audit_log(self.user, "PRINT", self.preview_card.customer_id, p.name)
@@ -1991,18 +2438,27 @@ class MainWindow(QWidget):
     # ---------------- Dashboard ----------------
     def build_tab_dashboard(self, parent: QWidget):
         lay = QVBoxLayout(parent)
-        lay.setSpacing(12)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(10)
 
-        card = QFrame(); card.setObjectName("card")
-        c = QVBoxLayout(card); c.setContentsMargins(14, 14, 14, 14); c.setSpacing(10)
+        # Filters card
+        card = QFrame()
+        card.setObjectName("card")
+        c = QVBoxLayout(card)
+        c.setContentsMargins(12, 12, 12, 12)
+        c.setSpacing(8)
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(10)
+        # Filters grid
+        filters_grid = QGridLayout()
+        filters_grid.setHorizontalSpacing(10)
+        filters_grid.setVerticalSpacing(8)
 
-        self.f_id = QLineEdit(); self.f_id.setPlaceholderText("ID (π.χ. 4 ή 4-10)")
-        self.f_name = QLineEdit(); self.f_name.setPlaceholderText("Όνομα περιέχει")
-        self.f_phone = QLineEdit(); self.f_phone.setPlaceholderText("Τηλέφωνο περιέχει")
+        self.f_id = QLineEdit()
+        self.f_id.setPlaceholderText("ID (π.χ. 4 ή 4-10)")
+        self.f_name = QLineEdit()
+        self.f_name.setPlaceholderText("Όνομα περιέχει")
+        self.f_phone = QLineEdit()
+        self.f_phone.setPlaceholderText("Τηλέφωνο περιέχει")
 
         self.f_priority = QComboBox()
         self.f_priority.addItems(["Όλα", "Έχει υπόλοιπο", "Χωρίς υπόλοιπο"])
@@ -2013,6 +2469,26 @@ class MainWindow(QWidget):
         self.f_sort_id = QComboBox()
         self.f_sort_id.addItems(["ID ↑ (μικρό→μεγάλο)", "ID ↓ (μεγάλο→μικρό)"])
 
+        # Add widgets to grid
+        filters_grid.addWidget(QLabel("ID:"), 0, 0)
+        filters_grid.addWidget(self.f_id, 0, 1)
+        filters_grid.addWidget(QLabel("Όνομα:"), 0, 2)
+        filters_grid.addWidget(self.f_name, 0, 3)
+        filters_grid.addWidget(QLabel("Τηλέφωνο:"), 0, 4)
+        filters_grid.addWidget(self.f_phone, 0, 5)
+        
+        filters_grid.addWidget(QLabel("Υπόλοιπο:"), 1, 0)
+        filters_grid.addWidget(self.f_priority, 1, 1)
+        filters_grid.addWidget(QLabel("Χρονικό διάστημα:"), 1, 2)
+        filters_grid.addWidget(self.f_serving, 1, 3)
+        filters_grid.addWidget(QLabel("Ταξινόμηση:"), 1, 4)
+        filters_grid.addWidget(self.f_sort_id, 1, 5)
+
+        c.addLayout(filters_grid)
+
+        # Filter buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
         btn_apply = QPushButton("Εφαρμογή φίλτρων")
         btn_apply.clicked.connect(self.refresh_dashboard)
 
@@ -2024,39 +2500,29 @@ class MainWindow(QWidget):
         btn_pdf.setObjectName("secondary")
         btn_pdf.clicked.connect(self.export_dashboard_to_pdf)
 
-        grid.addWidget(self.f_id,    0, 0)
-        grid.addWidget(self.f_name,  0, 1)
-        grid.addWidget(self.f_phone, 0, 2)
-        grid.addWidget(self.f_priority, 1, 0)
-        grid.addWidget(self.f_serving,  1, 1)
-        grid.addWidget(self.f_sort_id,  1, 2)
+        btn_row.addWidget(btn_apply)
+        btn_row.addWidget(btn_clear)
+        btn_row.addWidget(btn_pdf)
+        btn_row.addStretch(1)
+        c.addLayout(btn_row)
 
-        btns = QHBoxLayout()
-        btns.addWidget(btn_apply)
-        btns.addWidget(btn_clear)
-        btns.addWidget(btn_pdf)
-        btns.addStretch(1)
+        lay.addWidget(card)
 
-        btns_wrap = QWidget()
-        btns_wrap.setLayout(btns)
-        grid.addWidget(btns_wrap, 0, 3, 2, 1)
-
-        grid.setColumnStretch(0, 2)
-        grid.setColumnStretch(1, 2)
-        grid.setColumnStretch(2, 2)
-        grid.setColumnStretch(3, 1)
-
-        c.addLayout(grid)
-
+        # Table
         self.dash = QTableWidget(0, 6)
         self.dash.setHorizontalHeaderLabels(["ID", "Όνομα", "Τηλέφωνο", "Υπόλοιπο", "Αρχεία", "Χρόνος"])
         self.dash.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.dash.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.dash.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        c.addWidget(self.dash)
-
-        lay.addWidget(card)
-        lay.addStretch(1)
+        
+        # Set responsive column widths
+        self.dash.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.dash.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.dash.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.dash.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.dash.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.dash.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        
+        lay.addWidget(self.dash, 1)
 
     def clear_dashboard_filters(self):
         self.f_id.clear()
@@ -2121,7 +2587,7 @@ class MainWindow(QWidget):
             page_rect = printer.pageRect(QPrinter.Point)
             doc.setPageSize(page_rect.size())
 
-            doc.print_(printer)  # ✅ PySide6: print_ αντί για print
+            doc.print_(printer)
 
             QMessageBox.information(self, "ΟΚ", f"Το PDF αποθηκεύτηκε:\n{path}")
         except Exception as e:
@@ -2178,7 +2644,7 @@ class MainWindow(QWidget):
             if fphone and fphone not in phone:
                 continue
 
-            if fpriority == "Έχει υπόλοιπο" and bal <= 0:
+            if fpriority == "Έχει υπόλοιπο" and  bal <= 0:
                 continue
             if fpriority == "Χωρίς υπόλοιπο" and bal > 0:
                 continue
