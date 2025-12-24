@@ -1,20 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Client Manager v1 — Single-file build (copy/paste safe)
-
-CLEANUP done:
-- LIGHT theme default in users.json (first run)
-- Imports cleaned (kept what is used)
-- ScrollAreas hardened (no horizontal scroll / responsive)
-- PageRect PDF fix preserved
-- No business logic changed
-
-UI POLISH (graphics):
-- Refined Dark/Light themes (spacing, borders, hover, focus, disabled, menus, tooltips)
-- Better table/list look (alternate rows, tighter headers, cleaner selection)
-- Small UI-only tweaks (no business logic change)
-"""
-
 from cmath import rect
 import sys
 import json
@@ -2850,3 +2834,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
