@@ -1,5 +1,16 @@
 # -*- coding: utf-8 -*-
-from cmath import rect
+"""
+Client Manager v1 — Enhanced Customer Card Tab
+
+ENHANCEMENTS:
+- Goal tracking for each client
+- Declaration status tracking
+- Progress bar showing client status
+- Separate amount field (different from total)
+- AMKA field now only accepts 11 digits (no date default)
+- CRM-inspired layout with status visualization
+"""
+
 import sys
 import json
 import csv
@@ -22,7 +33,7 @@ from PySide6.QtWidgets import (
     QPushButton, QMessageBox, QFrame, QComboBox, QCheckBox, QTabWidget,
     QTableWidget, QTableWidgetItem, QDialog, QTextEdit, QFileDialog,
     QListWidget, QListWidgetItem, QScrollArea, QSizePolicy, QGridLayout,
-    QSplitter, QAbstractItemView, QHeaderView
+    QSplitter, QAbstractItemView, QHeaderView, QProgressBar
 )
 
 from openpyxl import Workbook, load_workbook
@@ -388,6 +399,17 @@ QToolTip {{
     padding: 6px 8px;
     border-radius: 10px;
 }}
+/* Progress Bar */
+QProgressBar {{
+    border: 1px solid #2A2C36;
+    border-radius: 8px;
+    text-align: center;
+    color: #E7E3E8;
+    background: #1B1C21;
+}}
+QProgressBar::chunk {{
+    border-radius: 8px;
+}}
 """
 
 LIGHT_STYLE = f"""
@@ -619,6 +641,17 @@ QToolTip {{
     padding: 6px 8px;
     border-radius: 10px;
 }}
+/* Progress Bar */
+QProgressBar {{
+    border: 1px solid #D6D6E2;
+    border-radius: 8px;
+    text-align: center;
+    color: #1A1A1A;
+    background: #FFFFFF;
+}}
+QProgressBar::chunk {{
+    border-radius: 8px;
+}}
 """
 
 
@@ -643,7 +676,9 @@ HEADERS = [
     "HasTaxisnet", "TaxisnetUser", "TaxisnetPass", "Kleidarithmos", "AMKA_AMA",
     "Aporipsi", "ActionsToday", "PaymentMethod", "RequestNotes", "Total", "Paid",
     "Balance", "FolderPath", "FilesConfirmedBy", "FilesConfirmedAt", "CreatedBy",
-    "CreatedAt", "LastEditedBy", "LastEditedAt"
+    "CreatedAt", "LastEditedBy", "LastEditedAt",
+    # Νέα πεδία για ενίσχυση καρτέλας
+    "Goal", "DeclarationStatus", "CustomerStatus", "Amount", "AMKA_Valid"
 ]
 
 
@@ -1137,6 +1172,26 @@ class CustomerCardWidget(QFrame):
         chips_row.addStretch(1)
         root.addLayout(chips_row)
 
+        # Progress bar for customer status
+        self.progress_bar_preview = QProgressBar()
+        self.progress_bar_preview.setTextVisible(True)
+        self.progress_bar_preview.setRange(0, 100)
+        self.progress_bar_preview.setFixedHeight(20)
+        root.addWidget(self.progress_bar_preview)
+
+        # Status chips
+        status_row = QHBoxLayout()
+        status_row.setSpacing(6)
+        self.ch_status = QLabel("Κατάσταση: -"); self.ch_status.setObjectName("chip")
+        self.ch_declaration = QLabel("Δήλωση: -"); self.ch_declaration.setObjectName("chip")
+        self.ch_amount = QLabel("Ποσό: -"); self.ch_amount.setObjectName("chip")
+
+        status_row.addWidget(self.ch_status)
+        status_row.addWidget(self.ch_declaration)
+        status_row.addWidget(self.ch_amount)
+        status_row.addStretch(1)
+        root.addLayout(status_row)
+
         info = QFrame()
         info.setObjectName("subcard")
         g = QGridLayout(info)
@@ -1241,6 +1296,10 @@ class CustomerCardWidget(QFrame):
         self.ch_balance.setText("Υπόλοιπο: -")
         self.ch_files.setText("Αρχεία: -")
         self.ch_age.setText("Ηλικία: -")
+        self.ch_status.setText("Κατάσταση: -")
+        self.ch_declaration.setText("Δήλωση: -")
+        self.ch_amount.setText("Ποσό: -")
+        self.progress_bar_preview.setValue(0)
 
         self.v_name.setText("-")
         self.v_phone.setText("-")
@@ -1273,6 +1332,12 @@ class CustomerCardWidget(QFrame):
         payment = str(rec.get("PaymentMethod") or "-")
         bal = str(rec.get("Balance") or "0")
         created = str(rec.get("CreatedAt") or "")
+        
+        # Νέα πεδία
+        customer_status = str(rec.get("CustomerStatus") or "Νέος")
+        declaration_status = str(rec.get("DeclarationStatus") or "-")
+        amount = str(rec.get("Amount") or "-")
+        goal = str(rec.get("Goal") or "")
 
         self.lbl_title.setText(f"Πελάτης #{cid}")
         self.lbl_sub.setText(name)
@@ -1280,6 +1345,22 @@ class CustomerCardWidget(QFrame):
         self.ch_id.setText(f"ID: {cid}")
         self.ch_balance.setText(f"Υπόλοιπο: {bal}")
         self.ch_age.setText(f"Ηλικία: {human_duration(created)}")
+        self.ch_status.setText(f"Κατάσταση: {customer_status}")
+        self.ch_declaration.setText(f"Δήλωση: {declaration_status}")
+        self.ch_amount.setText(f"Ποσό: {amount}")
+
+        # Ορισμός progress bar βάσει status
+        status_map = {
+            "Νέος": (10, "#7A2B2B"),
+            "Σε επεξεργασία": (30, "#7F67BE"),
+            "Αναμονή": (50, "#7F67BE"),
+            "Ολοκληρωμένος": (100, "#2E6E3F"),
+            "Απορριφθείς": (0, "#7A2B2B")
+        }
+        
+        progress, color = status_map.get(customer_status, (0, "#7A2B2B"))
+        self.progress_bar_preview.setValue(progress)
+        self.progress_bar_preview.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
 
         folder = resolve_customer_folder_from_record(rec)
         self._folder_path = folder
@@ -1303,16 +1384,18 @@ class CustomerCardWidget(QFrame):
         self.v_payment.setText(payment)
 
         self.lbl_actions.setText(f"Ενέργειες σήμερα: {str(rec.get('ActionsToday') or '-')}")
-        self.notes_preview.setPlainText(str(rec.get("RequestNotes") or ""))
+        
+        # Προσθήκη goal στις σημειώσεις αν υπάρχει
+        notes = str(rec.get("RequestNotes") or "")
+        if goal and goal.strip():
+            notes = f"Στόχος: {goal}\n\n{notes}"
+        self.notes_preview.setPlainText(notes)
 
     def selected_file_path(self) -> Optional[Path]:
-        folder = resolve_customer_folder_from_record(rect)
-        if not folder:
-            return None
         item = self.list_files.currentItem()
-        if not item:
+        if not item or not self._folder_path:
             return None
-        p = folder / item.text()
+        p = self._folder_path / item.text()
         return p if p.exists() else None
 
     @property
@@ -1420,14 +1503,14 @@ class LoginWindow(QWidget):
         dlg.exec()
 
 
-# ----------------------------- Customer Dialog -----------------------------
+# ----------------------------- Enhanced Customer Dialog -----------------------------
 class CustomerDialog(ScrollableDialog):
     def __init__(self, current_user: str, excel_row_index: int):
         super().__init__()
         self.current_user = current_user
         self.row_index = excel_row_index
         self.setWindowTitle("Καρτέλα πελάτη")
-        self.resize(1000, 700)
+        self.resize(1200, 850)  # Αύξηση ύψους για τα νέα στοιχεία
 
         wb, ws = open_ws()
         self.wb = wb
@@ -1442,6 +1525,87 @@ class CustomerDialog(ScrollableDialog):
         subtitle = QLabel(str(self.rec.get("Name") or ""))
         subtitle.setObjectName("muted")
         self.addWidget(subtitle)
+
+        # Status Bar Section
+        status_section = QFrame()
+        status_section.setObjectName("card")
+        status_layout = QVBoxLayout(status_section)
+        status_layout.setContentsMargins(12, 12, 12, 12)
+        status_layout.setSpacing(8)
+        
+        # Progress Bar για Customer Status
+        self.progress_label = QLabel("Κατάσταση Πελάτη:")
+        self.progress_label.setObjectName("subtitle")
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setRange(0, 100)
+        
+        # Customer Status ComboBox
+        self.customer_status_combo = QComboBox()
+        self.customer_status_combo.addItems([
+            "Νέος",
+            "Σε επεξεργασία", 
+            "Αναμονή",
+            "Ολοκληρωμένος",
+            "Απορριφθείς"
+        ])
+        self.customer_status_combo.currentTextChanged.connect(self.on_customer_status_changed)
+        
+        status_row = QHBoxLayout()
+        status_row.addWidget(QLabel("Κατάσταση:"))
+        status_row.addWidget(self.customer_status_combo)
+        status_row.addStretch(1)
+        status_row.addWidget(QLabel("Πρόοδος:"))
+        status_row.addWidget(self.progress_bar)
+        status_row.setSpacing(10)
+        
+        status_layout.addLayout(status_row)
+        
+        # Goal Section
+        goal_group = QFrame()
+        goal_group.setObjectName("subcard")
+        goal_layout = QVBoxLayout(goal_group)
+        goal_layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.goal_label = QLabel("Στόχος Πελάτη:")
+        self.goal_label.setObjectName("subtitle")
+        
+        self.goal_text = QTextEdit()
+        self.goal_text.setPlaceholderText("Περιγράψτε τον στόχο του πελάτη...")
+        self.goal_text.setMaximumHeight(80)
+        
+        goal_layout.addWidget(self.goal_label)
+        goal_layout.addWidget(self.goal_text)
+        
+        status_layout.addWidget(goal_group)
+        
+        # Declaration Status
+        decl_group = QFrame()
+        decl_group.setObjectName("subcard")
+        decl_layout = QVBoxLayout(decl_group)
+        decl_layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.declaration_label = QLabel("Κατάσταση Δηλώσεων:")
+        self.declaration_label.setObjectName("subtitle")
+        
+        self.declaration_combo = QComboBox()
+        self.declaration_combo.addItems([
+            "Μη Ορισμένη",
+            "Υποβολή Ε1",
+            "Υποβολή Ε2", 
+            "Υποβολή Ε3",
+            "Αναμονή Απάντησης",
+            "Ολοκληρωμένη",
+            "Πρόβλημα"
+        ])
+        
+        decl_layout.addWidget(self.declaration_label)
+        decl_layout.addWidget(self.declaration_combo)
+        
+        status_layout.addWidget(decl_group)
+        
+        self.addWidget(status_section)
 
         chips = QHBoxLayout()
         chips.setSpacing(6)
@@ -1467,14 +1631,25 @@ class CustomerDialog(ScrollableDialog):
         self.ed_afm = QLineEdit(str(self.rec.get("AFM") or ""))
         self.ed_amka = QLineEdit(str(self.rec.get("AMKA") or ""))
         self.ed_ama = QLineEdit(str(self.rec.get("AMA") or ""))
+        
+        # Νέο πεδίο για Amount
+        self.ed_amount = QLineEdit(str(self.rec.get("Amount") or ""))
+        self.ed_amount.setPlaceholderText("Ποσό (π.χ. 150.00)")
+        self.ed_amount.textChanged.connect(self.on_amount_changed)
+        
+        # Νέο πεδίο για AMKA Valid
+        self.cb_amka_valid = QComboBox()
+        self.cb_amka_valid.addItems(["Άγνωστο", "Έγκυρο", "Μη Έγκυρο"])
 
         set_digits_only(self.ed_afm, 9)
-        set_digits_only(self.ed_amka, 11)
+        set_digits_only(self.ed_amka, 11)  # Μόνο 11 ψηφία, όχι ημερομηνία
         self.ed_ama.setMaxLength(20)
 
         extra_l.addWidget(QLabel("ΑΦΜ:"), 0, 0); extra_l.addWidget(self.ed_afm, 0, 1)
         extra_l.addWidget(QLabel("ΑΜΚΑ:"), 1, 0); extra_l.addWidget(self.ed_amka, 1, 1)
         extra_l.addWidget(QLabel("ΑΜΑ:"),  2, 0); extra_l.addWidget(self.ed_ama,  2, 1)
+        extra_l.addWidget(QLabel("Ποσό:"), 3, 0); extra_l.addWidget(self.ed_amount, 3, 1)
+        extra_l.addWidget(QLabel("AMKA Έγκυρο:"), 4, 0); extra_l.addWidget(self.cb_amka_valid, 4, 1)
 
         self.addWidget(QLabel("Στοιχεία"))
         self.addWidget(extra_card)
@@ -1549,6 +1724,42 @@ class CustomerDialog(ScrollableDialog):
 
         self.refresh_views()
 
+    def on_customer_status_changed(self, status: str):
+        """Ενημερώνει τη μπάρα προόδου βάσει της κατάστασης"""
+        status_map = {
+            "Νέος": 10,
+            "Σε επεξεργασία": 30,
+            "Αναμονή": 50,
+            "Ολοκληρωμένος": 100,
+            "Απορριφθείς": 0
+        }
+        progress = status_map.get(status, 0)
+        self.progress_bar.setValue(progress)
+        
+        # Αλλαγή χρώματος βάσει προόδου
+        if progress >= 70:
+            self.progress_bar.setStyleSheet("QProgressBar::chunk { background-color: #2E6E3F; }")
+        elif progress >= 30:
+            self.progress_bar.setStyleSheet("QProgressBar::chunk { background-color: #7F67BE; }")
+        else:
+            self.progress_bar.setStyleSheet("QProgressBar::chunk { background-color: #7A2B2B; }")
+    
+    def on_amount_changed(self, text: str):
+        """Επικύρωση του ποσού"""
+        try:
+            # Αφαίρεση όλων των χαρακτήρων εκτός από ψηφία και τελεία
+            clean = ''.join(c for c in text if c.isdigit() or c == '.')
+            if clean.count('.') > 1:
+                # Άφησε μόνο την πρώτη τελεία
+                parts = clean.split('.')
+                clean = parts[0] + '.' + ''.join(parts[1:])
+            
+            if clean != text:
+                self.ed_amount.setText(clean)
+                self.ed_amount.setCursorPosition(len(clean))
+        except:
+            pass
+
     def refresh_views(self):
         self.rec = row_to_record(self.ws, self.row_index)
 
@@ -1575,6 +1786,44 @@ class CustomerDialog(ScrollableDialog):
             for ts, user, action, cid, details in lines[-300:]:
                 txt.append(f"{ts} | {user} | {action} | {details}")
             self.audit_box.setPlainText("\n".join(txt))
+
+        # Νέα πεδία
+        goal = str(self.rec.get("Goal") or "")
+        declaration_status = str(self.rec.get("DeclarationStatus") or "Μη Ορισμένη")
+        customer_status = str(self.rec.get("CustomerStatus") or "Νέος")
+        amount = str(self.rec.get("Amount") or "")
+        amka_valid = str(self.rec.get("AMKA_Valid") or "Άγνωστο")
+        
+        # Ορισμός τιμών
+        self.goal_text.setPlainText(goal)
+        
+        # Βρίσκουμε το index για το declaration combo
+        dec_index = self.declaration_combo.findText(declaration_status)
+        if dec_index >= 0:
+            self.declaration_combo.setCurrentIndex(dec_index)
+        
+        # Βρίσκουμε το index για το customer status combo
+        status_index = self.customer_status_combo.findText(customer_status)
+        if status_index >= 0:
+            self.customer_status_combo.setCurrentIndex(status_index)
+        else:
+            self.customer_status_combo.setCurrentText("Νέος")
+        
+        # Ορισμός ποσού
+        if amount:
+            try:
+                # Μορφοποίηση με 2 δεκαδικά
+                amount_float = float(amount)
+                self.ed_amount.setText(f"{amount_float:.2f}")
+            except:
+                self.ed_amount.setText("")
+        
+        # Ορισμός AMKA Valid
+        valid_index = self.cb_amka_valid.findText(amka_valid)
+        if valid_index >= 0:
+            self.cb_amka_valid.setCurrentIndex(valid_index)
+        else:
+            self.cb_amka_valid.setCurrentText("Άγνωστο")
 
         # sync fields with latest record (ώστε να μην βλέπεις "παλιά/άκυρα")
         self.ed_afm.setText(str(self.rec.get("AFM") or ""))
@@ -1623,6 +1872,23 @@ class CustomerDialog(ScrollableDialog):
         new_afm = (self.ed_afm.text() or "").strip()
         new_amka = (self.ed_amka.text() or "").strip()
         new_ama = (self.ed_ama.text() or "").strip()
+        
+        # Νέα πεδία
+        new_goal = self.goal_text.toPlainText()
+        new_declaration = self.declaration_combo.currentText()
+        new_customer_status = self.customer_status_combo.currentText()
+        
+        # Επεξεργασία ποσού
+        amount_text = (self.ed_amount.text() or "").strip().replace(",", ".")
+        new_amount = ""
+        if amount_text:
+            try:
+                amount_float = float(amount_text)
+                new_amount = f"{amount_float:.2f}"
+            except:
+                new_amount = ""
+        
+        new_amka_valid = self.cb_amka_valid.currentText()
 
         if new_afm and len(new_afm) != 9:
             QMessageBox.warning(self, "Σφάλμα", "Το ΑΦΜ πρέπει να έχει 9 ψηφία (ή να μείνει κενό).")
@@ -1636,11 +1902,17 @@ class CustomerDialog(ScrollableDialog):
             "AMKA": new_amka,
             "AMA": new_ama,
             "RequestNotes": new_notes,
+            "Goal": new_goal,
+            "DeclarationStatus": new_declaration,
+            "CustomerStatus": new_customer_status,
+            "Amount": new_amount,
+            "AMKA_Valid": new_amka_valid,
             "LastEditedBy": self.current_user,
             "LastEditedAt": now_iso(),
         })
         self.wb.save(EXCEL_PATH)
-        audit_log(self.current_user, "EDIT", self.customer_id, "Ενημέρωση στοιχείων/σημειώσεων")
+        audit_log(self.current_user, "EDIT", self.customer_id, 
+                 f"Ενημέρωση: Goal, Status={new_customer_status}, Amount={new_amount}")
         QMessageBox.information(self, "ΟΚ", "Ο πελάτης ενημερώθηκε.")
         self.refresh_views()
 
@@ -1819,7 +2091,10 @@ class MainWindow(QWidget):
 
         set_phone_validator(self.in_phone, 15)
         set_digits_only(self.in_afm, 9)
-        set_digits_only(self.in_amka, 11)
+        # AMKA: Μόνο 11 ψηφία, όχι ημερομηνία
+        self.in_amka.setMaxLength(11)
+        rx_amka = QRegularExpression(r"^\d{0,11}$")
+        self.in_amka.setValidator(QRegularExpressionValidator(rx_amka))
         self.in_ama.setMaxLength(20)
 
         grid.addWidget(QLabel("Ονοματεπώνυμο:"), 0, 0)
@@ -1884,7 +2159,7 @@ class MainWindow(QWidget):
         c.addLayout(row3)
 
         c.addWidget(QLabel("Επιβεβαίωση πριν την αποθήκευση:"))
-        self.cb_confirm_data = QCheckBox("Έχω επιβεβαιώσει τα στοιχεία του πελάτη")
+        self.cb_confirm_data = QCheckBox("Έχω επιβεβαιώσει τα στοιχεία του πελάτης")
         self.cb_confirm_services = QCheckBox("Έχω επιβεβαιώσει υπηρεσίες & τιμές")
         c.addWidget(self.cb_confirm_data)
         c.addWidget(self.cb_confirm_services)
@@ -2167,6 +2442,12 @@ class MainWindow(QWidget):
             "CreatedAt": now_iso(),
             "LastEditedBy": self.user,
             "LastEditedAt": now_iso(),
+            # Νέα πεδία με default τιμές
+            "Goal": "",
+            "DeclarationStatus": "Μη Ορισμένη",
+            "CustomerStatus": "Νέος",
+            "Amount": str(float(total)) if total else "",
+            "AMKA_Valid": "Άγνωστο",
         }
 
         append_record_by_headers(ws, record)
@@ -2834,4 +3115,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
