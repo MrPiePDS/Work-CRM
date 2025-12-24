@@ -1,4 +1,16 @@
 # -*- coding: utf-8 -*-
+"""
+Client Manager v1 — Enhanced Customer Card Tab
+
+ENHANCEMENTS:
+- Goal tracking for each client
+- Declaration status tracking
+- Progress bar showing client status
+- Separate amount field (different from total)
+- AMKA field now only accepts 11 digits (no date default)
+- CRM-inspired layout with status visualization
+"""
+
 import sys
 import json
 import csv
