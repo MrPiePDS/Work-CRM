@@ -30,12 +30,25 @@ from openpyxl import Workbook, load_workbook
 # ----------------------------- Data Paths -----------------------------
 APP_NAME = "ClientManagerV1"
 
+BOOT_DIR = Path.home() / "AppData" / "Roaming" / APP_NAME
+BOOT_DIR.mkdir(parents=True, exist_ok=True)
+BOOT_USERS_PATH = BOOT_DIR / "users.json"
+
+def read_boot_data_root() -> str:
+    try:
+        if BOOT_USERS_PATH.exists():
+            users = json.loads(BOOT_USERS_PATH.read_text(encoding="utf-8"))
+            return (users.get("_settings", {}) or {}).get("data_root", "") or ""
+    except Exception:
+        pass
+    return ""
+
 
 def data_dir() -> Path:
-    base = Path.home() / "AppData" / "Roaming" / APP_NAME
+    raw = read_boot_data_root().strip()
+    base = Path(raw) if raw else BOOT_DIR
     base.mkdir(parents=True, exist_ok=True)
     return base
-
 
 DATA_DIR = data_dir()
 EXCEL_PATH = DATA_DIR / "clients.xlsx"
@@ -785,6 +798,17 @@ def set_clients_root(path: str) -> None:
     users.setdefault("_settings", {})
     users["_settings"]["clients_root"] = path
     save_users(users)
+
+def get_data_root() -> str:
+    users = load_users()
+    return (users.get("_settings", {}) or {}).get("data_root", "") or ""
+
+def set_data_root(path: str) -> None:
+    users = load_users()
+    users.setdefault("_settings", {})
+    users["_settings"]["data_root"] = path
+    save_users(users)
+
 
 
 # ----------------------------- Storage: Excel (with migration) -----------------------------
@@ -1969,10 +1993,16 @@ class MainWindow(QWidget):
         self.tabs.addTab(self.tab_new, "Νέος πελάτης")
         self.tabs.addTab(self.tab_search, "Αναζήτηση")
         self.tabs.addTab(self.tab_dashboard, "Πίνακας")
+        self.tabs_settings = ResponsiveScrollArea()
+        self.tab_settings_inner = QWidget()
+        self.tabs_settings.setWidget(self.tab_settings_inner)
+        self.tabs.addTab(self.tabs_settings, "Ρυθμίσεις")
+        
 
         self.build_tab_new(self.tab_new_inner)
         self.build_tab_search(self.tab_search_inner)
         self.build_tab_dashboard(self.tab_dashboard_inner)
+        self.build_tab_settings(self.tab_settings_inner)
 
         self.apply_theme(get_theme())
         self.refresh_next_id()
@@ -2034,7 +2064,7 @@ class MainWindow(QWidget):
         sc.addLayout(row_root)
 
         hint = QLabel("Σημαντικό: Αν αλλάξεις ρίζα μετά, οι παλιοί πελάτες μπορεί να δείχνουν σε παλιό FolderPath.")
-        hint.setObjectName("muted")
+        hint.setObjectName("musted")
         hint.setWordWrap(True)
         sc.addWidget(hint)
 
@@ -3073,8 +3103,115 @@ class MainWindow(QWidget):
             self.dash.setItem(row_i, 3, QTableWidgetItem(f"{bal:.2f}"))
             self.dash.setItem(row_i, 4, QTableWidgetItem(files))
             self.dash.setItem(row_i, 5, QTableWidgetItem(serving_time))
+    # ---------------- Tab: Settings ----------------
+    def build_tab_settings(self, parent: QWidget):
+        lay = QVBoxLayout(parent)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(10)
+        
+        card = QFrame()
+        card.setObjectName("card")
+        c = QVBoxLayout(card)
+        c.setContentsMargins(12, 12, 12, 12)
+        c.setSpacing(10)
 
+        title = QLabel("Ρυθμίσεις Εφαρμογής")
+        title.setOjectName("title")
+        c.addWidget(title)
+        
+        info = QLabel("Εδώ αλλάζεις Paths & defaults."
+                      "Ορισμένες αλλαγές (Data Root) απαιτούν επανεκκίνηση της εφαρμογής.")
+        info.setObjectName("musted")
+        c.setWordWrap(True)
+        c.addWidget(info)
+        
+        # ------inputs------
+        self.set_data_root_in = QLineEdit(get_data_root())
+        self.set_data_root_in.setPlaceholderText(r"Data Root (π.χ. \\DESKTOP-5IHRGRN\desktop\APP\ClientManagerV1)") 
 
+        self.set_clients_root_in = QLineEdit(str(get_clients_root()))
+        self.set_clients_root_in.setPlaceholderText(r"Clients Root (π.χ. D:\Clients)")
+        
+        self.set_scanner_in = QLineEdit(get_scanner_folder())
+        self.set_scanner_in.setPlaceholderText(r"Φάκελος Scanner (π.χ. C:\Scanner)")    
+         
+        #Theme dropdown(optional; you also have a header file)
+        self.set_theme_combo = QComboBox()
+        self.set_theme_combo.addItems(["light", "dark"])
+        self.set_theme_combo.setCurrentText(get_theme())
+        
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(8)
+    
+        grid.addWidget(QLabel("Data Root: (Excel/users/audit)"), 0, 0)
+        grid.setWidget(self.set_data_root_in, 0, 1)
+        
+        btn_pick_data = QPushButton("Επιλογή…")
+        btn_pick_data.setObjectName("secondary")
+        grid.addWidget(btn_pick_data, 0, 2)
+        self.set_data_root_in.setPlaceholderText(r"Data Root (π.χ. \\DESKTOP-5IHRGRN\desktop\APP\ClientManagerV1)")
+        
+        def show_current_paths(self):
+    # These are the REAL paths the running app currently uses
+            txt = []
+            txt.append(f"DATA_DIR: {DATA_DIR}")
+            txt.append(f"EXCEL_PATH: {EXCEL_PATH}")
+            txt.append(f"USERS_PATH: {USERS_PATH}")
+            txt.append(f"AUDIT_PATH: {AUDIT_PATH}")
+            txt.append(f"DEFAULT_CLIENTS_ROOT: {DEFAULT_CLIENTS_ROOT}")
+            txt.append("")
+            txt.append(f"Setting data_root (saved): {get_data_root() or '(default roaming)'}")
+            txt.append(f"Setting clients_root (saved): {get_clients_root()}")
+            txt.append(f"Setting scanner_folder (saved): {get_scanner_folder() or '(empty)'}")
+            txt.append(f"Setting theme (saved): {get_theme()}")
+            self.lbl_roots.setPlainText("\n".join(txt))
+
+def apply_settings_from_tab(self):
+    # 1) save settings
+    new_data_root = self.set_data_root_in.text().strip()
+    new_clients_root = self.set_clients_root_in.text().strip()
+    new_scanner = self.set_scanner_in.text().strip()
+    new_theme = self.set_theme_combo.currentText().strip()
+
+    # validate write access if user provided a path
+    def can_write_folder(p: Path) -> bool:
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            test = p / "_write_test.tmp"
+            test.write_text("ok", encoding="utf-8")
+            test.unlink(missing_ok=True)
+            return True
+        except Exception:
+            return False
+
+    if new_data_root:
+        if not can_write_folder(Path(new_data_root)):
+            QMessageBox.warning(self, "Σφάλμα", "Δεν μπορώ να γράψω στο Data Root που έδωσες.")
+            return
+
+    if new_clients_root:
+        if not can_write_folder(Path(new_clients_root)):
+            QMessageBox.warning(self, "Σφάλμα", "Δεν μπορώ να γράψω στο Clients Root που έδωσες.")
+            return
+
+    set_data_root(new_data_root)          # takes full effect after restart
+    if new_clients_root:
+        set_clients_root(new_clients_root)
+    set_scanner_folder(new_scanner)
+    self.apply_theme("light" if new_theme == "light" else "dark")  # immediate
+
+    self.show_current_paths()
+
+    msg = "Αποθηκεύτηκαν οι ρυθμίσεις."
+    if new_data_root != (get_data_root() or ""):
+        # (this line is mostly informative)
+        pass
+    msg += "\n\nΣημείωση: Αν άλλαξες Data Root, χρειάζεται επανεκκίνηση για να φορτώσει άλλο Excel/users/audit."
+    QMessageBox.information(self, "ΟΚ", msg)
+
+    
+        
 # ----------------------------- Global Error Hook (για EXE) -----------------------------
 def excepthook(exc_type, exc, tb):
     msg = "".join(traceback.format_exception(exc_type, exc, tb))
@@ -3083,7 +3220,6 @@ def excepthook(exc_type, exc, tb):
     except Exception:
         pass
     sys.__stderr__.write(msg + "\n")
-
 
 sys.excepthook = excepthook
 
@@ -3103,3 +3239,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
