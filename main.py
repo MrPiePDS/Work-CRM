@@ -3116,7 +3116,7 @@ class MainWindow(QWidget):
         c.setSpacing(10)
 
         title = QLabel("Ρυθμίσεις Εφαρμογής")
-        title.setOjectName("title")
+        title.setObjectName("title")
         c.addWidget(title)
         
         info = QLabel("Εδώ αλλάζεις Paths & defaults."
@@ -3239,4 +3239,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
