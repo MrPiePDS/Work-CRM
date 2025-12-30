@@ -8,6 +8,8 @@ import html as _html
 import subprocess
 import tempfile
 import zipfile
+import os
+from pathlib import Path
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, List, Tuple
@@ -45,10 +47,10 @@ def read_boot_data_root() -> str:
 
 
 def data_dir() -> Path:
-    raw = read_boot_data_root().strip()
-    base = Path(raw) if raw else BOOT_DIR
-    base.mkdir(parents=True, exist_ok=True)
-    return base
+    base = Path(os.getenv("APPDATA") or Path.home())
+    app = base / "ClientManagerV1"
+    app.mkdir(parents=True, exist_ok=True)
+    return app
 
 DATA_DIR = data_dir()
 EXCEL_PATH = DATA_DIR / "clients.xlsx"
@@ -3348,4 +3350,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
