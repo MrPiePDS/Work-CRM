@@ -8,10 +8,10 @@ It uses an **offline-first, single-process** architecture: all data lives in a l
 ```
 ┌─────────────────── Flutter Desktop App (Windows) ────────────────────┐
 │                                                                      │
-│  ┌────────────┐    ┌──────────────────┐    ┌────────────────────────┐│
-│  │  UI Layer  │───▶│  Service Layer   │───▶│   Data Layer (SQLite) ││
-│  │ (Screens & │◀───│  (Business Logic)│◀───│   crm_data.db         ││
-│  │  Widgets)  │    └──────────────────┘    └────────────────────────┘│
+│  ┌────────────┐     ┌─────────────────┐     ┌───────────────────────┐│
+│  │  UI Layer  │───▶│ Service Layer   │───▶│   Data Layer (SQLite) ││
+│  │ (Screens & │◀───│ (Business Logic)│◀───│   crm_data.db         ││
+│  │  Widgets)  │     └─────────────────┘     └───────────────────────┘│
 │  └────────────┘             │                                        │
 │                             │                                        │
 │                    ┌────────▼────────┐                               │
