@@ -1,0 +1,51 @@
+# ─── Miscellaneous ────────────────────────────────────────────────────────────
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# ─── IntelliJ / Android Studio ────────────────────────────────────────────────
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# ─── VS Code (uncomment to ignore) ───────────────────────────────────────────
+#.vscode/
+
+# ─── Flutter / Dart / Pub ─────────────────────────────────────────────────────
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+/coverage/
+
+# ─── Symbolication / Obfuscation ──────────────────────────────────────────────
+app.*.symbols
+app.*.map.json
+
+# ─── Android build outputs ────────────────────────────────────────────────────
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ─── Dev / debug one-off files ────────────────────────────────────────────────
+analyze_output.txt
+doctor_output.txt
+test_hash.dart
+devtools_options.yaml
+
+# ─── Windows runner (don't need CMake build cache in git) ─────────────────────
+windows/flutter/ephemeral/
