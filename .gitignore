@@ -12,6 +12,9 @@
 .swiftpm/
 migrate_working_dir/
 
+# ─── Installer / distributable output ────────────────────────────────────────
+dist/
+
 # ─── IntelliJ / Android Studio ────────────────────────────────────────────────
 *.iml
 *.ipr
