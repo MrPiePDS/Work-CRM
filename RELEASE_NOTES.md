@@ -1,4 +1,4 @@
-# 🚀 Client Manager v1.3.0 — Release Notes
+# 🚀 Client Manager v1.2.1 — Release Notes
 **Date:** 06 March 2026
 
 ---
@@ -13,7 +13,7 @@
 
 ---
 
-## ✨ What's New in v1.3.0
+## ✨ What's New in v1.2.1
 
 ### 🔐 Secure Authentication & User Management
 - **SHA-256 password hashing:** All user credentials are now securely hashed and stored in the local SQLite database.

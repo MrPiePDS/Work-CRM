@@ -11,7 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.3.0] — 2026-03-06
+## [1.2.1] — 2026-03-06
 
 ### Added
 - **Settings Tab (Users Admin)**: Full admin control over user accounts (adding users, deleting users, changing passwords).
