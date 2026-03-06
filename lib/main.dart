@@ -1,21 +1,30 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'utils/theme.dart';
 import 'ui/screens/login_screen.dart';
 
+/// Global notifier for the app's theme mode.
+/// Can be accessed anywhere to change the theme: `appThemeNotifier.value = ThemeMode.dark;`
+late ValueNotifier<ThemeMode> appThemeNotifier;
+
 /// ─── Entry Point ────────────────────────────────────────────────────────────
 ///
 /// main() initialises the window manager for desktop platforms and then
 /// launches the Flutter widget tree.
-///
-/// Window sizing strategy:
-///   • App starts at 440×460 (login-sized, small).
-///   • DashboardScreen._setWindowSize() resizes to 1200×750 after login.
-///   • DashboardScreen._logout() resizes back to 440×460 on logout.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load saved theme from SharedPreferences
+  final prefs = await SharedPreferences.getInstance();
+  final savedTheme = prefs.getString('themeMode') ?? 'system';
+  ThemeMode initialTheme = ThemeMode.system;
+  if (savedTheme == 'light') initialTheme = ThemeMode.light;
+  if (savedTheme == 'dark') initialTheme = ThemeMode.dark;
+
+  appThemeNotifier = ValueNotifier<ThemeMode>(initialTheme);
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
@@ -45,13 +54,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Client Manager v1.1.0a',
-      debugShowCheckedModeBanner: false, // hide the debug ribbon in dev builds
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system, // follows the OS light/dark preference
-      home: const LoginScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: appThemeNotifier,
+      builder: (_, ThemeMode currentMode, __) {
+        return MaterialApp(
+          title: 'Client Manager v1.1.0a',
+          debugShowCheckedModeBanner:
+              false, // hide the debug ribbon in dev builds
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: currentMode,
+          home: const LoginScreen(),
+        );
+      },
     );
   }
 }

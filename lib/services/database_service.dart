@@ -1,6 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart';
-
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/client.dart';
@@ -26,6 +27,9 @@ class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
 
+  /// Set this to true in unit tests to use an in-memory database.
+  static bool isTestMode = false;
+
   factory DatabaseService() => _instance;
   DatabaseService._internal();
 
@@ -38,6 +42,13 @@ class DatabaseService {
     return _database!;
   }
 
+  /// Returns the absolute path of the persistent SQLite DB file.
+  Future<String> getDbPath() async {
+    if (isTestMode) return inMemoryDatabasePath;
+    Directory documentsDirectory = await getApplicationDocumentsDirectory();
+    return join(documentsDirectory.path, 'ClientManagerV2', 'crm_data.db');
+  }
+
   /// Opens (or creates) the SQLite file.
   /// On Windows/Linux, initialises the FFI bridge before opening.
   Future<Database> _initDatabase() async {
@@ -47,9 +58,13 @@ class DatabaseService {
       databaseFactory = databaseFactoryFfi;
     }
 
-    Directory documentsDirectory = await getApplicationDocumentsDirectory();
-    String path =
-        join(documentsDirectory.path, 'ClientManagerV2', 'crm_data.db');
+    String path;
+    if (isTestMode) {
+      path = inMemoryDatabasePath;
+    } else {
+      Directory documentsDirectory = await getApplicationDocumentsDirectory();
+      path = join(documentsDirectory.path, 'ClientManagerV2', 'crm_data.db');
+    }
 
     return await openDatabase(
       path,
@@ -219,6 +234,75 @@ class DatabaseService {
     );
   }
 
+  // ── User Management ────────────────────────────────────────────────────────
+
+  String _hashPassword(String password) {
+    var bytes = utf8.encode(password);
+    return sha256.convert(bytes).toString();
+  }
+
+  Future<Map<String, dynamic>?> verifyUser(
+      String username, String password) async {
+    final db = await database;
+    final hash = _hashPassword(password);
+    final List<Map<String, dynamic>> maps = await db.query(
+      'users',
+      where: 'username = ? AND password_hash = ?',
+      whereArgs: [username, hash],
+    );
+    if (maps.isNotEmpty) {
+      return maps.first;
+    }
+    // Fallback if DB is empty or corrupted (shouldn't happen due to onCreate, but just in case)
+    if (username == 'admin' && password == '1234') {
+      final checkAdmin =
+          await db.query('users', where: 'username = ?', whereArgs: ['admin']);
+      if (checkAdmin.isEmpty) {
+        await createUser('admin', '1234', 'admin');
+        return await verifyUser('admin', '1234');
+      }
+    }
+    return null;
+  }
+
+  Future<void> createUser(String username, String password, String role) async {
+    final db = await database;
+    await db.insert(
+      'users',
+      {
+        'username': username,
+        'password_hash': _hashPassword(password),
+        'role': role,
+        'created_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> updatePassword(String username, String newPassword) async {
+    final db = await database;
+    await db.update(
+      'users',
+      {'password_hash': _hashPassword(newPassword)},
+      where: 'username = ?',
+      whereArgs: [username],
+    );
+  }
+
+  Future<void> deleteUser(String username) async {
+    final db = await database;
+    await db.delete(
+      'users',
+      where: 'username = ?',
+      whereArgs: [username],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    final db = await database;
+    return await db.query('users', orderBy: 'username ASC');
+  }
+
   // ── Search ─────────────────────────────────────────────────────────────────
 
   /// Searches clients by ID, name, phone, or ΑΦΜ using a LIKE query.
@@ -269,5 +353,13 @@ class DatabaseService {
   Future<List<Map<String, dynamic>>> getAuditLogs() async {
     final db = await database;
     return await db.query('audit_logs', orderBy: 'id DESC');
+  }
+
+  /// Closes and nullifies the database instance (useful for test teardown).
+  Future<void> clearDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
   }
 }

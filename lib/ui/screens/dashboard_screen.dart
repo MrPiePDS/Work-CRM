@@ -2,11 +2,16 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
+
 import '../../services/database_service.dart';
+import '../../services/migration_service.dart';
 import '../../models/client.dart';
 import '../../data/mock_data.dart';
 import '../widgets/client_form.dart';
 import 'login_screen.dart';
+import '../../main.dart';
 
 /// ─── DashboardScreen ────────────────────────────────────────────────────────
 ///
@@ -133,6 +138,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (result == true) _refreshClients();
   }
 
+  Future<void> _updateTheme(ThemeMode mode) async {
+    appThemeNotifier.value = mode;
+    final prefs = await SharedPreferences.getInstance();
+    String modeString = 'system';
+    if (mode == ThemeMode.light) modeString = 'light';
+    if (mode == ThemeMode.dark) modeString = 'dark';
+    await prefs.setString('themeMode', modeString);
+    setState(() {}); // Rebuild UI to reflect the dropdown change
+  }
+
   // ── Tab Builders ───────────────────────────────────────────────────────────
 
   /// Tab 0: Persistent [ClientForm] embedded as a tab (not a dialog).
@@ -253,9 +268,347 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
   }
 
-  /// Tab 3: Placeholder for future settings UI.
+  /// Tab 3: Settings UI.
   Widget _buildSettingsTab() {
-    return const Center(child: Text('Ρυθμίσεις (Not implemented)'));
+    return ListView(
+      padding: const EdgeInsets.all(16.0),
+      children: [
+        _buildAppearanceSettings(),
+        _buildChangePasswordCard(),
+        if (_isAdmin) _buildAdminUserManagementCard(),
+        if (_isAdmin) _buildDataManagementCard(),
+      ],
+    );
+  }
+
+  Widget _buildAppearanceSettings() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Εμφάνιση (Appearance)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Divider(),
+            ListTile(
+              leading: const Icon(LucideIcons.palette),
+              title: const Text('Θέμα Εφαρμογής'),
+              subtitle: const Text(
+                  'Επιλέξτε ανάμεσα σε Φωτεινό, Σκοτεινό ή Σύστημα.'),
+              trailing: DropdownButton<ThemeMode>(
+                value: appThemeNotifier.value,
+                items: const [
+                  DropdownMenuItem(
+                      value: ThemeMode.system, child: Text('Σύστημα')),
+                  DropdownMenuItem(
+                      value: ThemeMode.light, child: Text('Φωτεινό')),
+                  DropdownMenuItem(
+                      value: ThemeMode.dark, child: Text('Σκοτεινό')),
+                ],
+                onChanged: (val) {
+                  if (val != null) _updateTheme(val);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Settings Sub-Cards ─────────────────────────────────────────────────────
+
+  Widget _buildChangePasswordCard() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ασφάλεια Λογαριασμού',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Divider(),
+            ListTile(
+              leading: const Icon(LucideIcons.lock),
+              title: const Text('Αλλαγή Κωδικού'),
+              subtitle: const Text(
+                  'Ενημερώστε τον κωδικό πρόσβασης του λογαριασμού σας.'),
+              trailing: ElevatedButton(
+                onPressed: _changePasswordDialog,
+                child: const Text('Αλλαγή'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdminUserManagementCard() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Διαχείριση Χρηστών (Admin)',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ElevatedButton.icon(
+                  onPressed: _addUserDialog,
+                  icon: const Icon(LucideIcons.userPlus, size: 16),
+                  label: const Text('Νέος Χρήστης'),
+                ),
+              ],
+            ),
+            const Divider(),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _db.getAllUsers(),
+              builder: (ctx, snapshot) {
+                if (!snapshot.hasData) return const CircularProgressIndicator();
+                final users = snapshot.data!;
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: users.length,
+                  itemBuilder: (ctx, i) {
+                    final u = users[i];
+                    return ListTile(
+                      leading: const Icon(LucideIcons.user),
+                      title: Text(u['username']),
+                      subtitle: Text('Ρόλος: ${u['role']}'),
+                      trailing: u['username'] == 'admin'
+                          ? null
+                          : IconButton(
+                              icon: const Icon(LucideIcons.trash,
+                                  color: Colors.red),
+                              onPressed: () async {
+                                await _db.deleteUser(u['username']);
+                                setState(() {}); // Refresh list
+                              },
+                            ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataManagementCard() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Διαχείριση Δεδομένων & Αρχείων',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Divider(),
+            ListTile(
+              leading: const Icon(LucideIcons.save),
+              title: const Text('Αντίγραφο Ασφαλείας (Backup)'),
+              subtitle: const Text('Εξαγωγή της βάσης δεδομένων crm_data.db'),
+              trailing: ElevatedButton(
+                onPressed: _backupDatabase,
+                child: const Text('Εξαγωγή'),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.uploadCloud),
+              title: const Text('Εισαγωγή από Excel'),
+              subtitle: const Text(
+                  'Μαζική προσθήκη πελατών από παλαιότερες εκδόσεις.'),
+              trailing: ElevatedButton(
+                onPressed: _importFromExcel,
+                child: const Text('Εισαγωγή'),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.folder),
+              title: const Text('Φάκελος Αρχείων Πελατών'),
+              subtitle: const Text(
+                  'Επιλογή κεντρικού φακέλου αποθήκευσης (π.χ. Τοπικό Δίκτυο).'),
+              trailing: ElevatedButton(
+                onPressed: _selectCustomFolder,
+                child: const Text('Αλλαγή'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _backupDatabase() async {
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Επιλογή τοποθεσίας αποθήκευσης DB',
+      fileName: 'crm_data_backup.db',
+    );
+    if (savePath == null) return;
+
+    final dbPath = await _db.getDbPath();
+    final dbFile = File(dbPath);
+    if (await dbFile.exists()) {
+      await dbFile.copy(savePath);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Το Backup ολοκληρώθηκε επιτυχώς!')));
+      }
+    }
+  }
+
+  Future<void> _importFromExcel() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+    );
+    if (result != null && result.files.single.path != null) {
+      if (mounted) setState(() => _isLoading = true);
+      try {
+        final migration = MigrationService();
+        await migration.importFromExcel(result.files.single.path!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Η εισαγωγή ολοκληρώθηκε!')));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Σφάλμα εισαγωγής.')));
+        }
+      } finally {
+        _refreshClients();
+      }
+    }
+  }
+
+  Future<void> _selectCustomFolder() async {
+    final result = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Επιλέξτε κεντρικό φάκελο',
+    );
+    if (result != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('customBaseFolder', result);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Ο κεντρικός φάκελος ορίστηκε σε: $result')));
+      }
+    }
+  }
+
+  void _changePasswordDialog() {
+    final curPassCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Αλλαγή Κωδικού'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: curPassCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Τρέχων Κωδικός'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: newPassCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Νέος Κωδικός'),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+            child: const Text('Άκυρο'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final userData =
+                  await _db.verifyUser(widget.user, curPassCtrl.text);
+              if (!mounted) return;
+              if (userData == null) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Ο τρέχων κωδικός είναι λάθος.')));
+                return;
+              }
+              if (newPassCtrl.text.isEmpty) return;
+              await _db.updatePassword(widget.user, newPassCtrl.text);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Ο κωδικός άλλαξε επιτυχώς.')));
+              if (ctx.mounted) {
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Αποθήκευση'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _addUserDialog() {
+    final userCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Νέος Χρήστης'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: userCtrl,
+              decoration: const InputDecoration(labelText: 'Όνομα Χρήστη'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Κωδικός'),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+            child: const Text('Άκυρο'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = userCtrl.text.trim();
+              if (user.isEmpty || passCtrl.text.isEmpty) return;
+              await _db.createUser(user, passCtrl.text, 'user');
+              if (!mounted) return;
+              setState(() {}); // refresh Settings tab
+              if (ctx.mounted) {
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Δημιουργία'),
+          )
+        ],
+      ),
+    );
   }
 
   /// Tab 4 (admin-only): Full audit log table.

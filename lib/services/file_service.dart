@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// ─── FileService ──────────────────────────────────────────────────────────────
 ///
@@ -28,13 +29,16 @@ class FileService {
   /// DEBUG TIP: If the folder cannot be found, call this method and print
   /// the returned path to confirm where the app is storing files.
   static Future<String> getClientFolder(String clientName) async {
-    final docs = await getApplicationDocumentsDirectory();
+    final prefs = await SharedPreferences.getInstance();
+    final customFolder = prefs.getString('customBaseFolder');
+    final String rootPath =
+        customFolder ?? (await getApplicationDocumentsDirectory()).path;
 
     // Strip filesystem-illegal characters from the name
     final safeName = clientName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
 
     final baseDir =
-        Directory(p.join(docs.path, 'ClientManagerV2', 'Clients', safeName));
+        Directory(p.join(rootPath, 'ClientManagerV2', 'Clients', safeName));
 
     if (!await baseDir.exists()) {
       await baseDir.create(recursive: true); // creates all missing parents

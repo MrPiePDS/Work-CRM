@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../services/database_service.dart';
 import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -42,9 +43,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    // Matches legacy simple verification
-    // In production, we would query the DB for the hash
-    if (user == 'admin' && pass == '1234') {
+    final db = DatabaseService();
+    final userData = await db.verifyUser(user, pass);
+
+    if (userData != null) {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => DashboardScreen(user: user)),
@@ -58,63 +60,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
-  void _changeAdminPassword() {
-    final curPassCtrl = TextEditingController();
-    final newPassCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Αλλαγή κωδικού admin'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("Θέσε νέο κωδικό για τον χρήστη 'admin'."),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: curPassCtrl,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Νέος κωδικός'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: newPassCtrl,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Επανάληψη νέου κωδικού'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () async {
-                if (curPassCtrl.text.isEmpty ||
-                    curPassCtrl.text != newPassCtrl.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Οι κωδικοί δεν ταιριάζουν.')),
-                  );
-                  return;
-                }
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Ο κωδικός του admin ενημερώθηκε.')),
-                );
-                Navigator.of(ctx).pop();
-              },
-              child: const Text('Αποθήκευση'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // The password change functionality is now securely handled inside the app's Settings Tab.
 
   @override
   Widget build(BuildContext context) {
@@ -156,37 +107,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           onSubmitted: (_) => _login(),
                         ),
                         const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _login,
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2))
-                                    : const Text('Σύνδεση'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _changeAdminPassword,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Theme.of(context).cardColor,
-                                  foregroundColor: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.color,
-                                  side: BorderSide(
-                                      color: Theme.of(context).dividerColor),
-                                ),
-                                child: const Text('Αλλαγή κωδικού admin'),
-                              ),
-                            ),
-                          ],
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _login,
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Text('Σύνδεση'),
+                          ),
                         ),
                       ],
                     ),

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -104,5 +105,105 @@ class PdfService {
         ],
       ),
     );
+  }
+
+  static Future<Uint8List> generateClientListPdf(
+      List<Client> clients, String savePath) async {
+    final font = await PdfGoogleFonts.interRegular();
+    final boldFont = await PdfGoogleFonts.interBold();
+    final pdf = pw.Document();
+
+    // Define table headers
+    final headers = [
+      'ID',
+      'Όνομα',
+      'Τηλέφωνο',
+      'Υπηρεσία',
+      'ΑΦΜ',
+      'ΑΜΚΑ',
+      'Taxisnet',
+      'Κλειδάριθμος',
+      'Κατάσταση',
+      'Υπόλοιπο'
+    ];
+
+    // Convert client data to table rows
+    final data = clients
+        .map((c) => [
+              c.id.toString(),
+              c.name,
+              c.phone,
+              c.serviceType,
+              c.afm,
+              c.amka.isNotEmpty ? c.amka : '-',
+              c.hasTaxisnet ? 'Ναι' : 'Όχι',
+              c.kleidarithmos.isNotEmpty ? c.kleidarithmos : '-',
+              c.customerStatus,
+              '${c.balance.toStringAsFixed(2)}€',
+            ])
+        .toList();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat:
+            PdfPageFormat.a4.landscape, // Use landscape for wider tables
+        theme: pw.ThemeData.withFont(base: font, bold: boldFont),
+        header: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Πελατολόγιο CRM',
+                style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue800),
+              ),
+              pw.SizedBox(height: 5),
+              pw.Text(
+                'Ημερομηνία εξαγωγής: ${DateTime.now().toIso8601String().substring(0, 10)}',
+                style:
+                    const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+              ),
+              pw.SizedBox(height: 20),
+            ]),
+        build: (context) {
+          return [
+            pw.TableHelper.fromTextArray(
+              headers: headers,
+              data: data,
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+              headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+              headerDecoration:
+                  const pw.BoxDecoration(color: PdfColors.blueGrey800),
+              rowDecoration: const pw.BoxDecoration(
+                  border: pw.Border(
+                      bottom:
+                          pw.BorderSide(color: PdfColors.grey300, width: 0.5))),
+              cellAlignment: pw.Alignment.centerLeft,
+              cellPadding: const pw.EdgeInsets.all(5),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              oddRowDecoration:
+                  const pw.BoxDecoration(color: PdfColors.grey100),
+            )
+          ];
+        },
+        footer: (context) => pw.Container(
+          alignment: pw.Alignment.centerRight,
+          margin: const pw.EdgeInsets.only(top: 10),
+          child: pw.Text(
+            'Σελίδα ${context.pageNumber} από ${context.pagesCount}',
+            style: const pw.TextStyle(color: PdfColors.grey),
+          ),
+        ),
+      ),
+    );
+
+    // Save the PDF to the specified path
+    // We are no longer using Printing.layoutPdf() to avoid immediately popping up the print dialog
+    // when we just want to save it as an export.
+    // We'll return the bytes so the caller can save it.
+    final bytes = await pdf.save();
+    return bytes;
   }
 }

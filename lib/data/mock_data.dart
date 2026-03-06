@@ -1,74 +1,86 @@
+import 'dart:math';
 import '../models/client.dart';
 
 class MockData {
   static List<Client> getMockClients() {
-    return [
-      Client(
-        id: 1,
-        name: 'Γιώργος Παπαδόπουλος',
-        phone: '6912345678',
-        afm: '123456789',
-        amka: '11111111111',
-        ama: '22222222',
-        requestNotes: 'Υποβολή Ε1',
-        serviceType: 'Λογιστικά',
-        taxisnetUser: 'giorgos_pap',
-        taxisnetPass: 'securePass1!',
-        hasTaxisnet: true,
-        total: 150.0,
-        paid: 50.0,
-        balance: 100.0,
-        customerStatus: 'Νέος',
-        date: DateTime.now().subtract(const Duration(days: 2)),
-        createdBy: 'admin',
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        lastEditedBy: 'admin',
-        lastEditedAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-      Client(
-        id: 2,
-        name: 'Μαρία Αντωνίου',
-        phone: '6944445555',
-        afm: '987654321',
-        amka: '22222222222',
-        ama: '33333333',
-        requestNotes: 'Αίτηση για Επίδομα Τέκνων',
-        serviceType: 'Επιδόματα',
-        taxisnetUser: '',
-        taxisnetPass: '',
-        hasTaxisnet: false,
-        total: 50.0,
-        paid: 50.0,
-        balance: 0.0,
-        customerStatus: 'Ολοκληρωμένος',
-        date: DateTime.now().subtract(const Duration(days: 10)),
-        createdBy: 'admin',
-        createdAt: DateTime.now().subtract(const Duration(days: 10)),
-        lastEditedBy: 'admin',
-        lastEditedAt: DateTime.now().subtract(const Duration(days: 5)),
-      ),
-      Client(
-        id: 3,
-        name: 'Κώστας Γεωργίου',
-        phone: '6933332222',
-        afm: '112233445',
-        amka: '33333333333',
-        ama: '44444444',
-        requestNotes: 'Ρύθμιση Δανείου',
-        serviceType: 'Δάνεια',
-        taxisnetUser: 'kostas_g',
-        taxisnetPass: 'kpass123',
-        hasTaxisnet: true,
-        total: 300.0,
-        paid: 0.0,
-        balance: 300.0,
-        customerStatus: 'Σε επεξεργασία',
-        date: DateTime.now(),
-        createdBy: 'admin',
-        createdAt: DateTime.now(),
-        lastEditedBy: 'admin',
-        lastEditedAt: DateTime.now(),
-      )
+    final random = Random();
+    final firstNames = [
+      'Γιώργος',
+      'Μαρία',
+      'Κώστας',
+      'Ελένη',
+      'Νίκος',
+      'Κατερίνα',
+      'Δημήτρης',
+      'Αναστασία',
+      'Ιωάννης',
+      'Σοφία'
     ];
+    final lastNames = [
+      'Παπαδόπουλος',
+      'Αντωνίου',
+      'Γεωργίου',
+      'Οικονόμου',
+      'Μακρής',
+      'Κωνσταντίνου',
+      'Παναγιώτου',
+      'Σταύρου',
+      'Αθανασίου',
+      'Μιχαήλ'
+    ];
+    final services = [
+      'Λογιστικά',
+      'Επιδόματα',
+      'Δάνεια',
+      'ΑΜΚΑ / ΑΜΑ',
+      'Κλειδάριθμος',
+      'ΑΦΜ',
+      'Εργασία'
+    ];
+    final statuses = [
+      'Νέος',
+      'Σε επεξεργασία',
+      'Αναμονή',
+      'Ολοκληρωμένος',
+      'Απορριφθείς'
+    ];
+    final idTypes = ['Ταυτότητα', 'Άσυλο', 'Διαβατήριο', 'Άλλο'];
+
+    return List.generate(50, (index) {
+      final name =
+          '${firstNames[random.nextInt(firstNames.length)]} ${lastNames[random.nextInt(lastNames.length)]}';
+      final service = services[random.nextInt(services.length)];
+      final total = (random.nextInt(20) + 1) * 10.0;
+      final paid =
+          random.nextBool() ? total : (random.nextBool() ? 0.0 : total / 2);
+      final hasTaxisnet = random.nextBool();
+
+      return Client(
+        id: index + 1,
+        name: name,
+        phone: '69${random.nextInt(90000000) + 10000000}',
+        email: 'user$index@example.com',
+        afm: '${random.nextInt(900000000) + 100000000}',
+        amka:
+            '${random.nextInt(900000) + 100000}${random.nextInt(90000) + 10000}',
+        ama: '${random.nextInt(90000000) + 10000000}',
+        idType: idTypes[random.nextInt(idTypes.length)],
+        requestNotes: 'Αίτημα ${index + 1} για $service',
+        serviceType: service,
+        taxisnetUser: hasTaxisnet ? 'user$index' : '',
+        taxisnetPass: hasTaxisnet ? 'pass$index' : '',
+        hasTaxisnet: hasTaxisnet,
+        total: total,
+        paid: paid,
+        balance: total - paid,
+        customerStatus: statuses[random.nextInt(statuses.length)],
+        date: DateTime.now().subtract(Duration(days: random.nextInt(30))),
+        createdBy: 'admin',
+        createdAt: DateTime.now().subtract(Duration(days: random.nextInt(30))),
+        lastEditedBy: 'admin',
+        lastEditedAt:
+            DateTime.now().subtract(Duration(days: random.nextInt(10))),
+      );
+    });
   }
 }
