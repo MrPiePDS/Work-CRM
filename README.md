@@ -34,6 +34,12 @@ flutter pub get
 flutter run -d windows
 ```
 
+### Test
+
+```bash
+flutter test
+```
+
 ### Default Login
 
 | Username | Password |

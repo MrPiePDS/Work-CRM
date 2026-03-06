@@ -11,6 +11,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0] — 2026-03-06
+
+### Added
+- **Settings Tab (Users Admin)**: Full admin control over user accounts (adding users, deleting users, changing passwords).
+- **Secure Authentication**: SHA-256 hashing for all users stored in the local SQLite database. Hardcoded login strings were removed.
+- **Comprehensive Test Suite**: Added Unit Tests (Models, Services) and Widget/Integration Tests (App flow, Login UI, Client form tests) under the `test/` directory.
+
+### Changed
+- `database_service.dart`: Added full user management methods (`getUser`, `createUser`, `updateUserPassword`, `deleteUser`, checking login credentials).
+- `login_screen.dart`: Refactored to authenticate against the new `DatabaseService`.
+- `dashboard_screen.dart`: Refactored to separate the users settings tab functionality.
+
+### Fixed
+- Fixed unlinked settings navigation and logout state transitions.
+- Cleanup of debugging logs (eliminated unused files and print statements).
+
+---
+
 ## [1.2.0] — 2026-03-03
 
 ### Added
