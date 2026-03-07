@@ -50,6 +50,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _searchQuery = '';
   String _logsSearchQuery = '';
 
+  // ── Optimization Cache ────────────────────────────────────────────────────
+  List<Client> _cachedFilteredClients = [];
+  List<Map<String, dynamic>> _cachedFilteredAuditLogs = [];
+
   // ── Filter State ──────────────────────────────────────────────────────────
   String _filterStatus = 'Όλα';
   String _filterService = 'Όλα';
@@ -78,9 +82,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ];
   static const _paymentOptions = ['Όλα', 'Μετρητά', 'Κάρτα', 'Iris'];
 
-  /// Returns the client list filtered by the current dropdown selections.
-  List<Client> get _filteredClients {
-    final filtered = _clients.where((c) {
+  /// Updates the cached filtered lists for clients and logs.
+  /// This should be called whenever filter criteria or raw data change.
+  void _applyFilters() {
+    // 1. Filter Clients (Status, Service, Payment + Search Query)
+    final clients = _clients.where((c) {
+      // Dropdown filters
       if (_filterStatus != 'Όλα' && c.customerStatus != _filterStatus) {
         return false;
       }
@@ -90,16 +97,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (_filterPayment != 'Όλα' && c.paymentMethod != _filterPayment) {
         return false;
       }
+
+      // Search query filter (Local implementation)
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        final matches = (c.id?.toString().contains(q) ?? false) ||
+            c.name.toLowerCase().contains(q) ||
+            c.phone.toLowerCase().contains(q) ||
+            c.afm.toLowerCase().contains(q);
+        if (!matches) return false;
+      }
       return true;
     }).toList();
 
-    // Applied sorting if requested
+    // 2. Sort Clients
     if (_sortColumnIndex != null) {
-      filtered.sort((a, b) {
+      clients.sort((a, b) {
         int cmp = 0;
         switch (_sortColumnIndex) {
           case 0:
-            cmp = a.id!.compareTo(b.id!);
+            cmp = (a.id ?? 0).compareTo(b.id ?? 0);
             break;
           case 1:
             cmp = a.name.compareTo(b.name);
@@ -117,13 +134,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return _sortAscending ? cmp : -cmp;
       });
     }
-    return filtered;
-  }
+    _cachedFilteredClients = clients;
 
-  /// Returns the audit logs filtered by search query and the current dropdown selections
-  /// (which are matched against the logs' associated client records).
-  List<Map<String, dynamic>> get _filteredAuditLogs {
-    return _auditLogs.where((log) {
+    // 3. Filter Logs (Search Query + O(1) Lookups for cross-filter)
+    // Using a map for O(1) lookups instead of O(N) searching inside the filter loop
+    final clientMap = {for (var c in _clients) c.id.toString(): c};
+
+    _cachedFilteredAuditLogs = _auditLogs.where((log) {
+      // Search filter
       if (_logsSearchQuery.isNotEmpty) {
         final q = _logsSearchQuery.toLowerCase();
         final matchesQuery = (log['username']
@@ -137,26 +155,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (!matchesQuery) return false;
       }
 
+      // Customer attribute filters (Cross-referencing logs with current client state)
       if (_filterStatus != 'Όλα' ||
           _filterService != 'Όλα' ||
           _filterPayment != 'Όλα') {
         final custId = log['customer_id']?.toString();
-        final clientInfo = _clients
-            .cast<Client?>()
-            .firstWhere((c) => c?.id.toString() == custId, orElse: () => null);
+        final client = clientMap[custId];
+        if (client == null) {
+          return false;
+        }
 
-        if (clientInfo == null) return false;
-
-        if (_filterStatus != 'Όλα' &&
-            clientInfo.customerStatus != _filterStatus) {
+        if (_filterStatus != 'Όλα' && client.customerStatus != _filterStatus) {
           return false;
         }
         if (_filterService != 'Όλα' &&
-            !clientInfo.serviceType.contains(_filterService)) {
+            !client.serviceType.contains(_filterService)) {
           return false;
         }
-        if (_filterPayment != 'Όλα' &&
-            clientInfo.paymentMethod != _filterPayment) {
+        if (_filterPayment != 'Όλα' && client.paymentMethod != _filterPayment) {
           return false;
         }
       }
@@ -164,10 +180,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).toList();
   }
 
+  // Getters now return the cached (pre-sorted and pre-filtered) lists
+  List<Client> get _filteredClients => _cachedFilteredClients;
+  List<Map<String, dynamic>> get _filteredAuditLogs => _cachedFilteredAuditLogs;
+
   void _onSort(int columnIndex, bool ascending) {
     setState(() {
       _sortColumnIndex = columnIndex;
       _sortAscending = ascending;
+      _applyFilters(); // Re-apply sorting to the cache
     });
   }
 
@@ -214,20 +235,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ── Data Loading ───────────────────────────────────────────────────────────
 
-  /// Fetches clients from SQLite (or runs a search if [_searchQuery] is set).
+  /// Fetches clients from SQLite.
   ///
   /// On first launch with an empty DB, seeds [MockData] so the UI is not blank.
   /// Audit logs are only fetched when [_isAdmin] is true to avoid leaking data.
   Future<void> _refreshClients() async {
     setState(() => _isLoading = true);
 
-    // Use search query if present, otherwise fetch all records
-    var data = _searchQuery.isEmpty
-        ? await _db.getAllClients()
-        : await _db.searchClients(_searchQuery);
+    // Fetch ALL records (search is now done locally for better performance)
+    var data = await _db.getAllClients();
 
     // DEBUG: Seed mock data on a completely empty database (first-run only)
-    if (data.isEmpty && _searchQuery.isEmpty) {
+    if (data.isEmpty) {
       final mockData = MockData.getMockClients();
       for (final client in mockData) {
         await _db.insertClient(client);
@@ -242,6 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         _clients = data;
         _auditLogs = logs;
+        _applyFilters(); // Apply local filtering and populate cache
         _isLoading = false;
       });
     }
@@ -297,15 +317,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         _miniDropdown('Κατάσταση', _filterStatus, _statusOptions, (v) {
-          setState(() => _filterStatus = v!);
+          setState(() {
+            _filterStatus = v!;
+            _applyFilters();
+          });
         }),
         const SizedBox(width: 8),
         _miniDropdown('Υπηρεσία', _filterService, _serviceOptions, (v) {
-          setState(() => _filterService = v!);
+          setState(() {
+            _filterService = v!;
+            _applyFilters();
+          });
         }),
         const SizedBox(width: 8),
         _miniDropdown('Πληρωμή', _filterPayment, _paymentOptions, (v) {
-          setState(() => _filterPayment = v!);
+          setState(() {
+            _filterPayment = v!;
+            _applyFilters();
+          });
         }),
         if (showClearButton &&
             (_filterStatus != 'Όλα' ||
@@ -317,6 +346,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _filterStatus = 'Όλα';
               _filterService = 'Όλα';
               _filterPayment = 'Όλα';
+              _applyFilters();
             }),
             icon: const Icon(LucideIcons.x, size: 14),
             tooltip: 'Καθαρισμός',
@@ -366,13 +396,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ? theme.colorScheme.onPrimaryContainer
                       : theme.disabledColor),
             ),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: isSelected
-                  ? theme.colorScheme.onPrimaryContainer
-                  : theme.colorScheme.onSurface,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 12,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface,
             ),
+            selectedItemBuilder: (BuildContext context) {
+              return options.map<Widget>((String item) {
+                return Container(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    item,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isSelected
+                          ? theme.colorScheme.onPrimaryContainer
+                          : theme.colorScheme.onSurface,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                  ),
+                );
+              }).toList();
+            },
             items: options
                 .map((o) => DropdownMenuItem(value: o, child: Text(o)))
                 .toList(),
@@ -412,7 +456,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onChanged: (val) {
                     setState(() {
                       _searchQuery = val;
-                      _refreshClients();
+                      _applyFilters();
                     });
                   },
                 ),
@@ -423,6 +467,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   setState(() {
                     _sortAscending = !_sortAscending;
                     _sortColumnIndex ??= 0; // Default sort by ID
+                    _applyFilters();
                   });
                 },
                 icon: Icon(
@@ -1213,6 +1258,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onChanged: (val) {
                     setState(() {
                       _logsSearchQuery = val;
+                      _applyFilters();
                     });
                   },
                 ),
