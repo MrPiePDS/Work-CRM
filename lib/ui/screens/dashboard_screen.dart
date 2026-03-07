@@ -48,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _auditLogs = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  String _logsSearchQuery = '';
 
   // ── Filter State ──────────────────────────────────────────────────────────
   String _filterStatus = 'Όλα';
@@ -80,12 +81,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Returns the client list filtered by the current dropdown selections.
   List<Client> get _filteredClients {
     final filtered = _clients.where((c) {
-      if (_filterStatus != 'Όλα' && c.customerStatus != _filterStatus)
+      if (_filterStatus != 'Όλα' && c.customerStatus != _filterStatus) {
         return false;
-      if (_filterService != 'Όλα' && !c.serviceType.contains(_filterService))
+      }
+      if (_filterService != 'Όλα' && !c.serviceType.contains(_filterService)) {
         return false;
-      if (_filterPayment != 'Όλα' && c.paymentMethod != _filterPayment)
+      }
+      if (_filterPayment != 'Όλα' && c.paymentMethod != _filterPayment) {
         return false;
+      }
       return true;
     }).toList();
 
@@ -114,6 +118,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     }
     return filtered;
+  }
+
+  /// Returns the audit logs filtered by search query and the current dropdown selections
+  /// (which are matched against the logs' associated client records).
+  List<Map<String, dynamic>> get _filteredAuditLogs {
+    return _auditLogs.where((log) {
+      if (_logsSearchQuery.isNotEmpty) {
+        final q = _logsSearchQuery.toLowerCase();
+        final matchesQuery = (log['username']
+                    ?.toString()
+                    .toLowerCase()
+                    .contains(q) ??
+                false) ||
+            (log['action']?.toString().toLowerCase().contains(q) ?? false) ||
+            (log['details']?.toString().toLowerCase().contains(q) ?? false) ||
+            (log['customer_id']?.toString().contains(q) ?? false);
+        if (!matchesQuery) return false;
+      }
+
+      if (_filterStatus != 'Όλα' ||
+          _filterService != 'Όλα' ||
+          _filterPayment != 'Όλα') {
+        final custId = log['customer_id']?.toString();
+        final clientInfo = _clients
+            .cast<Client?>()
+            .firstWhere((c) => c?.id.toString() == custId, orElse: () => null);
+
+        if (clientInfo == null) return false;
+
+        if (_filterStatus != 'Όλα' &&
+            clientInfo.customerStatus != _filterStatus) {
+          return false;
+        }
+        if (_filterService != 'Όλα' &&
+            !clientInfo.serviceType.contains(_filterService)) {
+          return false;
+        }
+        if (_filterPayment != 'Όλα' &&
+            clientInfo.paymentMethod != _filterPayment) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
   }
 
   void _onSort(int columnIndex, bool ascending) {
@@ -374,8 +422,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onPressed: () {
                   setState(() {
                     _sortAscending = !_sortAscending;
-                    if (_sortColumnIndex == null)
-                      _sortColumnIndex = 0; // Default sort by ID
+                    _sortColumnIndex ??= 0; // Default sort by ID
                   });
                 },
                 icon: Icon(
@@ -1135,68 +1182,186 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ///   2. audit_logs table has rows (open DB in a SQLite viewer)
   ///   3. DatabaseService.getAuditLogs() is being called without exception
   Widget _buildAuditLogsTab() {
-    if (_auditLogs.isEmpty) {
-      return const Center(
-          child: Text('Δεν υπάρχουν καταγεγραμμένες ενέργειες.'));
-    }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SingleChildScrollView(
-        child: DataTable(
-          showCheckboxColumn: false,
-          columns: const [
-            DataColumn(label: Text('Ημ/νία')),
-            DataColumn(label: Text('Χρήστης')),
-            DataColumn(label: Text('Ενέργεια')),
-            DataColumn(label: Text('ID Πελάτη')),
-            DataColumn(label: Text('Λεπτομέρειες')),
-          ],
-          rows: _auditLogs.map((log) {
-            // Parse ISO-8601 timestamp into a displayable string
-            final ts = log['timestamp'] as String? ?? '';
-            DateTime? dt;
-            try {
-              dt = DateTime.parse(ts);
-            } catch (_) {
-              // If timestamp is malformed, fall back to raw string
-            }
-            final formattedDate = dt != null
-                ? '${dt.day.toString().padLeft(2, '0')}/'
-                    '${dt.month.toString().padLeft(2, '0')}/'
-                    '${dt.year} '
-                    '${dt.hour.toString().padLeft(2, '0')}:'
-                    '${dt.minute.toString().padLeft(2, '0')}'
-                : ts;
+    final filteredLogs = _filteredAuditLogs;
 
-            final action = log['action'] as String? ?? '';
-            final isCreate =
-                action == 'Create'; // green for create, orange for update
-
-            return DataRow(cells: [
-              DataCell(
-                  Text(formattedDate, style: const TextStyle(fontSize: 12))),
-              DataCell(Text(log['username'] as String? ?? '-')),
-              DataCell(Chip(
-                label: Text(action, style: const TextStyle(fontSize: 11)),
-                backgroundColor: isCreate
-                    ? Colors.green.withValues(alpha: 0.15)
-                    : Colors.orange.withValues(alpha: 0.15),
-              )),
-              DataCell(Text((log['customer_id'] ?? '-').toString())),
-              DataCell(
-                SizedBox(
-                  width: 280,
-                  child: Text(
-                    log['details'] as String? ?? '-',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
+    return Column(
+      children: [
+        // ── Unified Search & Filter Toolbar ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText:
+                        'Αναζήτηση στα logs (χρήστης, ενέργεια, ID, κείμενο)...',
+                    prefixIcon: const Icon(LucideIcons.search, size: 20),
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.04),
                   ),
+                  onChanged: (val) {
+                    setState(() {
+                      _logsSearchQuery = val;
+                    });
+                  },
                 ),
               ),
-            ]);
-          }).toList(),
+              const SizedBox(width: 8),
+              _buildFilterRow(),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        // ── Logs List Body ──
+        Expanded(
+          child: _auditLogs.isEmpty
+              ? const Center(
+                  child: Text('Δεν υπάρχουν καταγεγραμμένες ενέργειες.'))
+              : filteredLogs.isEmpty
+                  ? const Center(
+                      child: Text('Κανένα log δεν ταιριάζει με τα κριτήρια.'))
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header Row
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                                bottom: BorderSide(
+                                    color: Theme.of(context)
+                                        .dividerColor
+                                        .withValues(alpha: 0.1))),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            children: [
+                              _buildHeader('Ημ/νία', 2),
+                              _buildHeader('Χρήστης', 2),
+                              _buildHeader('Ενέργεια', 1),
+                              _buildHeader('ID Πελάτη', 1),
+                              _buildHeader('Λεπτομέρειες', 4),
+                            ],
+                          ),
+                        ),
+                        // List Body
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: filteredLogs.length,
+                            itemBuilder: (ctx, i) {
+                              final log = filteredLogs[i];
+                              final ts = log['timestamp'] as String? ?? '';
+                              DateTime? dt;
+                              try {
+                                dt = DateTime.parse(ts);
+                              } catch (_) {}
+                              final formattedDate = dt != null
+                                  ? '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
+                                  : ts;
+
+                              final action = log['action'] as String? ?? '';
+                              final isCreate = action == 'Create';
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                      bottom: BorderSide(
+                                          color: Theme.of(context)
+                                              .dividerColor
+                                              .withValues(alpha: 0.05))),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                        flex: 2,
+                                        child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8),
+                                            child: Text(formattedDate,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 12)))),
+                                    Expanded(
+                                        flex: 2,
+                                        child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8),
+                                            child: Text(
+                                                log['username'] as String? ??
+                                                    '-',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 12)))),
+                                    Expanded(
+                                        flex: 1,
+                                        child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8),
+                                            child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Chip(
+                                                    label: Text(action,
+                                                        style: const TextStyle(
+                                                            fontSize: 11)),
+                                                    padding: EdgeInsets.zero,
+                                                    visualDensity:
+                                                        VisualDensity.compact,
+                                                    backgroundColor: isCreate
+                                                        ? Colors.green
+                                                            .withValues(
+                                                                alpha: 0.15)
+                                                        : Colors.orange
+                                                            .withValues(
+                                                                alpha:
+                                                                    0.15))))),
+                                    Expanded(
+                                        flex: 1,
+                                        child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8),
+                                            child: Text(
+                                                (log['customer_id'] ?? '-')
+                                                    .toString(),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 12)))),
+                                    Expanded(
+                                        flex: 4,
+                                        child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8),
+                                            child: Text(
+                                                log['details'] as String? ??
+                                                    '-',
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 12)))),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+        ),
+      ],
     );
   }
 
