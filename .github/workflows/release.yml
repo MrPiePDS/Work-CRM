@@ -92,9 +92,9 @@ jobs:
         shell: pwsh
         run: |
           $src = "dist\ClientManager_Setup.exe"
-          $dst = "dist\ClientManager_Setup_v$env:APP_VERSION.exe"
-          Rename-Item $src $dst
-          Write-Host "Renamed to: $dst"
+          $new_name = "ClientManager_Setup_v$env:APP_VERSION.exe"
+          Rename-Item -Path $src -NewName $new_name
+          Write-Host "Renamed to: dist\$new_name"
 
       # ── 11. Create GitHub Release + Upload asset ─────────────────────────
       - name: Create GitHub Release
