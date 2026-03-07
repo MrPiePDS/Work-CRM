@@ -461,70 +461,231 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ? const Center(child: Text('Δεν βρέθηκαν πελάτες'))
                   : LayoutBuilder(
                       builder: (context, constraints) {
-                        return SingleChildScrollView(
-                          child: SizedBox(
-                            width: constraints.maxWidth,
-                            child: DataTable(
-                              showCheckboxColumn: false,
-                              columnSpacing: 20,
-                              horizontalMargin: 16,
-                              sortColumnIndex: _sortColumnIndex,
-                              sortAscending: _sortAscending,
-                              columns: [
-                                DataColumn(
-                                    label: const Text('ID'), onSort: _onSort),
-                                DataColumn(
-                                    label: const Text('Όνομα'),
-                                    onSort: _onSort),
-                                DataColumn(
-                                    label: const Text('Υπηρεσία'),
-                                    onSort: _onSort),
-                                DataColumn(
-                                    label: const Text('ΑΦΜ'), onSort: _onSort),
-                                const DataColumn(label: Text('Τηλέφωνο')),
-                                DataColumn(
-                                    label: const Text('Υπόλοιπο'),
-                                    numeric: true,
-                                    onSort: _onSort),
-                                const DataColumn(label: Text('Κατάσταση')),
-                              ],
-                              rows: filtered
-                                  .map((c) => DataRow(
-                                        onSelectChanged: (_) => _showForm(c),
-                                        cells: [
-                                          DataCell(Text(c.id.toString())),
-                                          DataCell(Text(c.name)),
-                                          DataCell(Text(c.serviceType)),
-                                          DataCell(Text(c.afm)),
-                                          DataCell(Text(c.phone)),
-                                          DataCell(Text('${c.balance}€',
-                                              style: TextStyle(
-                                                color: c.balance > 0
-                                                    ? Colors.red
-                                                    : Colors.green,
-                                                fontWeight: FontWeight.bold,
-                                              ))),
-                                          DataCell(Chip(
-                                            label: Text(c.customerStatus,
-                                                style: const TextStyle(
-                                                    fontSize: 12)),
-                                            backgroundColor:
-                                                c.customerStatus == 'Νέος'
-                                                    ? Colors.blue
-                                                        .withValues(alpha: 0.1)
-                                                    : Colors.green
-                                                        .withValues(alpha: 0.1),
-                                          )),
-                                        ],
-                                      ))
-                                  .toList(),
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                    bottom: BorderSide(
+                                        color: Theme.of(context)
+                                            .dividerColor
+                                            .withValues(alpha: 0.1))),
+                              ),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Row(
+                                children: [
+                                  _buildSortableHeader('ID', 0, 1),
+                                  _buildSortableHeader('Όνομα', 1, 3),
+                                  _buildSortableHeader('Υπηρεσία', 2, 2),
+                                  _buildSortableHeader('ΑΦΜ', 3, 2),
+                                  _buildHeader('Τηλέφωνο', 2),
+                                  _buildSortableHeader('Υπόλοιπο', 5, 2,
+                                      numeric: true),
+                                  _buildHeader('Κατάσταση', 2),
+                                ],
+                              ),
                             ),
-                          ),
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: filtered.length,
+                                itemBuilder: (ctx, i) {
+                                  final c = filtered[i];
+                                  return InkWell(
+                                    onTap: () => _showForm(c),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        border: Border(
+                                            bottom: BorderSide(
+                                                color: Theme.of(context)
+                                                    .dividerColor
+                                                    .withValues(alpha: 0.05))),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                              flex: 1,
+                                              child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 8),
+                                                  child: Text(
+                                                      c.id.toString(),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                          fontSize: 13)))),
+                                          Expanded(
+                                              flex: 3,
+                                              child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 8),
+                                                  child: Text(
+                                                      c.name,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                          fontSize: 13,
+                                                          fontWeight: FontWeight
+                                                              .w500)))),
+                                          Expanded(
+                                              flex: 2,
+                                              child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 8),
+                                                  child: Text(
+                                                      c.serviceType,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                          fontSize: 13)))),
+                                          Expanded(
+                                              flex: 2,
+                                              child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 8),
+                                                  child: Text(
+                                                      c.afm,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                          fontSize: 13)))),
+                                          Expanded(
+                                              flex: 2,
+                                              child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 8),
+                                                  child: Text(
+                                                      c.phone,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                          fontSize: 13)))),
+                                          Expanded(
+                                              flex: 2,
+                                              child: Padding(
+                                                  padding:
+                                                      const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 8),
+                                                  child: Align(
+                                                      alignment: Alignment
+                                                          .centerRight,
+                                                      child: Text(
+                                                          '${c.balance}€',
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: TextStyle(
+                                                              fontSize: 13,
+                                                              color: c.balance >
+                                                                      0
+                                                                  ? Colors.red
+                                                                  : Colors
+                                                                      .green,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold))))),
+                                          Expanded(
+                                              flex: 2,
+                                              child: Padding(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8),
+                                                  child: Align(
+                                                      alignment:
+                                                          Alignment.centerLeft,
+                                                      child: Chip(
+                                                          label: Text(
+                                                              c.customerStatus,
+                                                              style: const TextStyle(
+                                                                  fontSize:
+                                                                      11)),
+                                                          padding:
+                                                              EdgeInsets.zero,
+                                                          visualDensity:
+                                                              VisualDensity
+                                                                  .compact,
+                                                          backgroundColor: c.customerStatus ==
+                                                                  'Νέος'
+                                                              ? Colors.blue.withValues(
+                                                                  alpha: 0.1)
+                                                              : Colors.green.withValues(
+                                                                  alpha: 0.1))))),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSortableHeader(String label, int columnIndex, int flex,
+      {bool numeric = false}) {
+    final isSorted = _sortColumnIndex == columnIndex;
+    final theme = Theme.of(context);
+    return Expanded(
+      flex: flex,
+      child: InkWell(
+        onTap: () {
+          _onSort(columnIndex, isSorted ? !_sortAscending : true);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          alignment: numeric ? Alignment.centerRight : Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface),
+              ),
+              if (isSorted) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  _sortAscending ? LucideIcons.arrowUp : LucideIcons.arrowDown,
+                  size: 14,
+                  color: theme.colorScheme.primary,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(String label, int flex) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurface),
+        ),
+      ),
     );
   }
 
