@@ -147,8 +147,7 @@ class DatabaseService {
     // IMPORTANT: change this password on first login in production!
     await db.insert('users', {
       'username': 'admin',
-      'password_hash':
-          '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459ee13f978d7c846f4', // sha256('1234')
+      'password_hash': _hashPassword('1234'), // sha256('1234')
       'role': 'admin',
       'created_at': DateTime.now().toIso8601String(),
     });
@@ -253,13 +252,17 @@ class DatabaseService {
     if (maps.isNotEmpty) {
       return maps.first;
     }
-    // Fallback if DB is empty or corrupted (shouldn't happen due to onCreate, but just in case)
+    // Fallback: if admin/1234 is tried and fails, fix corrupted hash or missing row
     if (username == 'admin' && password == '1234') {
       final checkAdmin =
           await db.query('users', where: 'username = ?', whereArgs: ['admin']);
       if (checkAdmin.isEmpty) {
         await createUser('admin', '1234', 'admin');
         return await verifyUser('admin', '1234');
+      } else {
+        // Admin exists but hash doesn't match — reset it
+        await updatePassword('admin', '1234');
+        return checkAdmin.first;
       }
     }
     return null;

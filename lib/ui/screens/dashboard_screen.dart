@@ -4,8 +4,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' as xl;
 
 import '../../services/database_service.dart';
+import '../../services/pdf_service.dart';
 import '../../services/migration_service.dart';
 import '../../models/client.dart';
 import '../../data/mock_data.dart';
@@ -46,6 +48,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _auditLogs = [];
   bool _isLoading = true;
   String _searchQuery = '';
+
+  // ── Filter State ──────────────────────────────────────────────────────────
+  String _filterStatus = 'Όλα';
+  String _filterService = 'Όλα';
+  String _filterPayment = 'Όλα';
+
+  // ── Sorting State ─────────────────────────────────────────────────────────
+  int? _sortColumnIndex;
+  bool _sortAscending = true;
+
+  static const _statusOptions = [
+    'Όλα',
+    'Νέος',
+    'Σε επεξεργασία',
+    'Αναμονή',
+    'Ολοκληρωμένος',
+    'Απορριφθείς'
+  ];
+  static const _serviceOptions = [
+    'Όλα',
+    'ΑΜΚΑ / ΑΜΑ',
+    'Κλειδάριθμος',
+    'Μεταβολή',
+    'ΑΦΜ',
+    'Εργασία',
+    'Custom'
+  ];
+  static const _paymentOptions = ['Όλα', 'Μετρητά', 'Κάρτα', 'Iris'];
+
+  /// Returns the client list filtered by the current dropdown selections.
+  List<Client> get _filteredClients {
+    final filtered = _clients.where((c) {
+      if (_filterStatus != 'Όλα' && c.customerStatus != _filterStatus)
+        return false;
+      if (_filterService != 'Όλα' && !c.serviceType.contains(_filterService))
+        return false;
+      if (_filterPayment != 'Όλα' && c.paymentMethod != _filterPayment)
+        return false;
+      return true;
+    }).toList();
+
+    // Applied sorting if requested
+    if (_sortColumnIndex != null) {
+      filtered.sort((a, b) {
+        int cmp = 0;
+        switch (_sortColumnIndex) {
+          case 0:
+            cmp = a.id!.compareTo(b.id!);
+            break;
+          case 1:
+            cmp = a.name.compareTo(b.name);
+            break;
+          case 2:
+            cmp = a.serviceType.compareTo(b.serviceType);
+            break;
+          case 3:
+            cmp = a.afm.compareTo(b.afm);
+            break;
+          case 5:
+            cmp = a.balance.compareTo(b.balance);
+            break;
+        }
+        return _sortAscending ? cmp : -cmp;
+      });
+    }
+    return filtered;
+  }
+
+  void _onSort(int columnIndex, bool ascending) {
+    setState(() {
+      _sortColumnIndex = columnIndex;
+      _sortAscending = ascending;
+    });
+  }
 
   /// Returns true if the logged-in user is 'admin'.
   /// Used to conditionally show the 5th Logs tab and load audit data.
@@ -166,46 +242,162 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Tab 1: Realtime search list.
-  /// Each keystroke updates [_searchQuery] and triggers [_refreshClients].
+  /// Shared minimalistic filter row used in both Search and Table tabs.
+  Widget _buildFilterRow({bool showClearButton = true}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _miniDropdown('Κατάσταση', _filterStatus, _statusOptions, (v) {
+          setState(() => _filterStatus = v!);
+        }),
+        const SizedBox(width: 8),
+        _miniDropdown('Υπηρεσία', _filterService, _serviceOptions, (v) {
+          setState(() => _filterService = v!);
+        }),
+        const SizedBox(width: 8),
+        _miniDropdown('Πληρωμή', _filterPayment, _paymentOptions, (v) {
+          setState(() => _filterPayment = v!);
+        }),
+        if (showClearButton &&
+            (_filterStatus != 'Όλα' ||
+                _filterService != 'Όλα' ||
+                _filterPayment != 'Όλα')) ...[
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: () => setState(() {
+              _filterStatus = 'Όλα';
+              _filterService = 'Όλα';
+              _filterPayment = 'Όλα';
+            }),
+            icon: const Icon(LucideIcons.x, size: 14),
+            tooltip: 'Καθαρισμός',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Compact dropdown chip used in filter rows.
+  Widget _miniDropdown(String label, String value, List<String> options,
+      ValueChanged<String?> onChanged) {
+    final isSelected = value != 'Όλα';
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          iconSize: 16,
+          borderRadius: BorderRadius.circular(16),
+          elevation: 3,
+          icon: Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Icon(LucideIcons.chevronDown,
+                color: isSelected
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.disabledColor),
+          ),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: isSelected
+                ? theme.colorScheme.onPrimaryContainer
+                : theme.colorScheme.onSurface,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+          items: options
+              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  /// Tab 1: Realtime search list with filter dropdowns.
   Widget _buildSearchTab() {
+    final filtered = _filteredClients;
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            decoration: const InputDecoration(
-              prefixIcon: Icon(LucideIcons.search, size: 18),
-              hintText: 'Αναζήτηση...',
-              contentPadding: EdgeInsets.symmetric(vertical: 0),
-            ),
-            onChanged: (val) {
-              setState(() {
-                _searchQuery = val;
-                _refreshClients(); // re-query for each keystroke
-              });
-            },
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(LucideIcons.search, size: 18),
+                    hintText: 'Αναζήτηση...',
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.04),
+                  ),
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                      _refreshClients();
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _sortAscending = !_sortAscending;
+                    if (_sortColumnIndex == null)
+                      _sortColumnIndex = 0; // Default sort by ID
+                  });
+                },
+                icon: Icon(
+                  _sortAscending ? LucideIcons.arrowDown : LucideIcons.arrowUp,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                tooltip: _sortAscending ? 'Φθίνουσα σειρά' : 'Αύξουσα σειρά',
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              _buildFilterRow(),
+            ],
           ),
         ),
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : _clients.isEmpty
+              : filtered.isEmpty
                   ? const Center(child: Text('Δεν βρέθηκαν πελάτες'))
                   : ListView.builder(
-                      itemCount: _clients.length,
+                      itemCount: filtered.length,
                       itemBuilder: (ctx, i) {
-                        final c = _clients[i];
+                        final c = filtered[i];
                         return ListTile(
                           leading: CircleAvatar(
-                            // Show client's DB primary key as the avatar label
                             child: Text('#${c.id}',
                                 style: const TextStyle(fontSize: 11)),
                           ),
                           title: Text(c.name),
                           subtitle: Text('${c.serviceType} - ${c.afm}'),
                           trailing: Text('${c.balance}€'),
-                          onTap: () => _showForm(c), // open edit dialog
+                          onTap: () => _showForm(c),
                         );
                       },
                     ),
@@ -214,58 +406,214 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Tab 2: Full DataTable overview of all loaded clients.
-  /// Balance is coloured red (> 0) or green (= 0).
-  /// Clicking any row opens the edit [ClientForm] dialog.
+  /// Tab 2: Full-width, scrollable DataTable with filters and export buttons.
   Widget _buildDashboardTab() {
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : _clients.isEmpty
-            ? const Center(child: Text('Δεν βρέθηκαν πελάτες'))
-            : SingleChildScrollView(
-                scrollDirection: Axis.horizontal, // handles wide tables
-                child: SingleChildScrollView(
-                  child: DataTable(
-                    showCheckboxColumn: false,
-                    columns: const [
-                      DataColumn(label: Text('ID')),
-                      DataColumn(label: Text('Όνομα')),
-                      DataColumn(label: Text('Υπηρεσία')),
-                      DataColumn(label: Text('ΑΦΜ')),
-                      DataColumn(label: Text('Τηλέφωνο')),
-                      DataColumn(label: Text('Υπόλοιπο')),
-                      DataColumn(label: Text('Κατάσταση')),
-                    ],
-                    rows: _clients
-                        .map((c) => DataRow(
-                              onSelectChanged: (_) => _showForm(c),
-                              cells: [
-                                DataCell(Text(c.id.toString())),
-                                DataCell(Text(c.name)),
-                                DataCell(Text(c.serviceType)),
-                                DataCell(Text(c.afm)),
-                                DataCell(Text(c.phone)),
-                                // Red balance = money still owed; green = fully paid
-                                DataCell(Text('${c.balance}€',
-                                    style: TextStyle(
-                                      color: c.balance > 0
-                                          ? Colors.red
-                                          : Colors.green,
-                                      fontWeight: FontWeight.bold,
-                                    ))),
-                                DataCell(Chip(
-                                  label: Text(c.customerStatus,
-                                      style: const TextStyle(fontSize: 12)),
-                                  backgroundColor: c.customerStatus == 'Νέος'
-                                      ? Colors.blue.withValues(alpha: 0.1)
-                                      : Colors.green.withValues(alpha: 0.1),
-                                )),
+    final filtered = _filteredClients;
+    return Column(
+      children: [
+        // ── Minimalist Toolbar: Title, Filters, Export Buttons ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Text(
+                'Λίστα Πελατών',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+              ),
+              const Spacer(),
+              _buildFilterRow(showClearButton: true),
+              const SizedBox(width: 16),
+              Container(
+                  width: 1,
+                  height: 24,
+                  color: Colors.grey.withValues(alpha: 0.3)),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () => _exportToPdf(filtered),
+                icon: const Icon(LucideIcons.fileText, size: 20),
+                tooltip: 'Εξαγωγή σε PDF',
+                color: Colors.red.shade700,
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: () => _exportToExcel(filtered),
+                icon: const Icon(LucideIcons.table, size: 20),
+                tooltip: 'Εξαγωγή σε Excel',
+                color: Colors.green.shade700,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        // ── Table body ──
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : filtered.isEmpty
+                  ? const Center(child: Text('Δεν βρέθηκαν πελάτες'))
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        return SingleChildScrollView(
+                          child: SizedBox(
+                            width: constraints.maxWidth,
+                            child: DataTable(
+                              showCheckboxColumn: false,
+                              columnSpacing: 20,
+                              horizontalMargin: 16,
+                              sortColumnIndex: _sortColumnIndex,
+                              sortAscending: _sortAscending,
+                              columns: [
+                                DataColumn(
+                                    label: const Text('ID'), onSort: _onSort),
+                                DataColumn(
+                                    label: const Text('Όνομα'),
+                                    onSort: _onSort),
+                                DataColumn(
+                                    label: const Text('Υπηρεσία'),
+                                    onSort: _onSort),
+                                DataColumn(
+                                    label: const Text('ΑΦΜ'), onSort: _onSort),
+                                const DataColumn(label: Text('Τηλέφωνο')),
+                                DataColumn(
+                                    label: const Text('Υπόλοιπο'),
+                                    numeric: true,
+                                    onSort: _onSort),
+                                const DataColumn(label: Text('Κατάσταση')),
                               ],
-                            ))
-                        .toList(),
-                  ),
-                ),
-              );
+                              rows: filtered
+                                  .map((c) => DataRow(
+                                        onSelectChanged: (_) => _showForm(c),
+                                        cells: [
+                                          DataCell(Text(c.id.toString())),
+                                          DataCell(Text(c.name)),
+                                          DataCell(Text(c.serviceType)),
+                                          DataCell(Text(c.afm)),
+                                          DataCell(Text(c.phone)),
+                                          DataCell(Text('${c.balance}€',
+                                              style: TextStyle(
+                                                color: c.balance > 0
+                                                    ? Colors.red
+                                                    : Colors.green,
+                                                fontWeight: FontWeight.bold,
+                                              ))),
+                                          DataCell(Chip(
+                                            label: Text(c.customerStatus,
+                                                style: const TextStyle(
+                                                    fontSize: 12)),
+                                            backgroundColor:
+                                                c.customerStatus == 'Νέος'
+                                                    ? Colors.blue
+                                                        .withValues(alpha: 0.1)
+                                                    : Colors.green
+                                                        .withValues(alpha: 0.1),
+                                          )),
+                                        ],
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
+  // ── Export Helpers ─────────────────────────────────────────────────────────
+
+  Future<void> _exportToPdf(List<Client> clients) async {
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Αποθήκευση PDF',
+      fileName: 'clients_export.pdf',
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (savePath == null) return;
+
+    final bytes = await PdfService.generateClientListPdf(clients, savePath);
+    await File(savePath).writeAsBytes(bytes);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Το PDF εξήχθη επιτυχώς!')));
+    }
+  }
+
+  Future<void> _exportToExcel(List<Client> clients) async {
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Αποθήκευση Excel',
+      fileName: 'clients_export.xlsx',
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+    );
+    if (savePath == null) return;
+
+    final excel = xl.Excel.createExcel();
+    final sheet = excel['Πελάτες'];
+
+    // Headers
+    final headers = [
+      'ID',
+      'Όνομα',
+      'Τηλέφωνο',
+      'Email',
+      'Υπηρεσία',
+      'ΑΦΜ',
+      'ΑΜΚΑ',
+      'Κατάσταση',
+      'Πληρωμή',
+      'Σύνολο',
+      'Πληρωμένο',
+      'Υπόλοιπο'
+    ];
+    for (var i = 0; i < headers.length; i++) {
+      sheet
+          .cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
+          .value = xl.TextCellValue(headers[i]);
+    }
+
+    // Data rows
+    for (var r = 0; r < clients.length; r++) {
+      final c = clients[r];
+      final values = [
+        c.id.toString(),
+        c.name,
+        c.phone,
+        c.email,
+        c.serviceType,
+        c.afm,
+        c.amka,
+        c.customerStatus,
+        c.paymentMethod,
+        c.total.toStringAsFixed(2),
+        c.paid.toStringAsFixed(2),
+        c.balance.toStringAsFixed(2),
+      ];
+      for (var col = 0; col < values.length; col++) {
+        sheet
+            .cell(xl.CellIndex.indexByColumnRow(
+                columnIndex: col, rowIndex: r + 1))
+            .value = xl.TextCellValue(values[col]);
+      }
+    }
+
+    // Remove the default 'Sheet1' if it exists
+    if (excel.sheets.containsKey('Sheet1')) {
+      excel.delete('Sheet1');
+    }
+
+    final bytes = excel.save();
+    if (bytes != null) {
+      await File(savePath).writeAsBytes(bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Το Excel εξήχθη επιτυχώς!')));
+      }
+    }
   }
 
   /// Tab 3: Settings UI.
