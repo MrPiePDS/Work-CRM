@@ -288,37 +288,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+      // Use smaller horizontal padding to make it more compact
       decoration: BoxDecoration(
         color: isSelected
             ? theme.colorScheme.primaryContainer
             : theme.colorScheme.onSurface.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isDense: true,
-          iconSize: 16,
-          borderRadius: BorderRadius.circular(16),
-          elevation: 3,
-          icon: Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Icon(LucideIcons.chevronDown,
-                color: isSelected
-                    ? theme.colorScheme.onPrimaryContainer
-                    : theme.disabledColor),
+      child: Theme(
+        data: theme.copyWith(
+          hoverColor: Colors.transparent,
+          focusColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            isDense: true,
+            iconSize: 16,
+            borderRadius: BorderRadius.circular(16),
+            elevation: 3,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            icon: Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(LucideIcons.chevronDown,
+                  color: isSelected
+                      ? theme.colorScheme.onPrimaryContainer
+                      : theme.disabledColor),
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: isSelected
+                  ? theme.colorScheme.onPrimaryContainer
+                  : theme.colorScheme.onSurface,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            ),
+            items: options
+                .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+                .toList(),
+            onChanged: onChanged,
           ),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: isSelected
-                ? theme.colorScheme.onPrimaryContainer
-                : theme.colorScheme.onSurface,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-          items: options
-              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-              .toList(),
-          onChanged: onChanged,
         ),
       ),
     );
@@ -424,13 +435,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
               ),
               const Spacer(),
-              _buildFilterRow(showClearButton: true),
-              const SizedBox(width: 16),
-              Container(
-                  width: 1,
-                  height: 24,
-                  color: Colors.grey.withValues(alpha: 0.3)),
-              const SizedBox(width: 8),
               IconButton(
                 onPressed: () => _exportToPdf(filtered),
                 icon: const Icon(LucideIcons.fileText, size: 20),
