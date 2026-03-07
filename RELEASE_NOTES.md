@@ -1,50 +1,54 @@
-# 🚀 Client Manager v1.2.1 — Release Notes
-**Date:** 06 March 2026
+# 🚀 Client Manager v1.2.2 — Release Notes
+**Date:** 07 March 2026
 
 ---
 
 ## 📦 Download
 
-| File | Size |
-|------|------|
-| `ClientManager_Setup.exe` | 13.5 MB |
+| File | Description |
+|------|-------------|
+| `ClientManager_Setup_v1.2.2.exe` | Windows installer (self-contained, ~14 MB) |
 
-> Run the installer on any **Windows 10/11** PC — no additional software or settings required.
+> Run the installer on any **Windows 10/11** PC — no additional software required.
 
 ---
 
-## ✨ What's New in v1.2.1
+## ✨ What's New in v1.2.2
 
-### 🔐 Secure Authentication & User Management
-- **SHA-256 password hashing:** All user credentials are now securely hashed and stored in the local SQLite database.
-- **Admin Settings Tab:** A new dedicated tab for administrators to add, delete, and manage user accounts and passwords directly from the dashboard.
-- **Database login:** Hardcoded login credentials have been entirely removed in favor of real database authentication.
+### 📊 Admin Logs Dashboard (Major Redesign)
+- The "Αρχείο (Logs)" tab is now a full **admin-only dashboard** with a full-width, virtualized table that handles thousands of log entries without any lag.
+- **Search bar**: Filter logs in real-time by username, action type, customer ID, or any text in the details.
+- **Cross-tab filters**: The Status, Service, and Payment filters now apply to logs as well, letting you focus on specific client categories instantly.
 
-### 🧪 Comprehensive Testing Suite
-- **Unit and Integration Tests:** Added a robust suite of automated tests covering models, database services, and UI flows.
-- **App Flow Verification:** Ensured stability through rigorous widget testing of the login screen and client form.
+### ⚡ Performance Overhaul
+- **Near-zero lag on filters**: Filtering and search now happen entirely in memory. No more database calls on every keystroke.
+- **O(1) log lookups**: Log-to-client cross-referencing uses a hash map instead of a full list scan, making the Logs Dashboard instant even with large datasets.
+- **Memoized lists**: Filtered results are cached and only recomputed when something actually changes.
 
-### 🧹 Codebase Cleanup and Polish
-- **Refactoring:** Cleaned up UI logic in the dashboard and login screens for better maintainability.
-- **Log Removal:** Cleared out debugging artifacts and legacy test files.
-- **Flow Fixes:** Resolved issues with settings navigation and logout transitions.
+### 🐛 Bug Fixes
+- **Dropdown dark mode**: Fixed an issue where filter dropdown menu options showed black text on a dark background, making them invisible.
+
+### 🤖 CI/CD Automation
+- Push a `v*` tag to GitHub and a GitHub Actions workflow automatically builds the release, packages the Inno Setup installer, and publishes a new GitHub Release — no manual steps required.
 
 ---
 
 ## 📥 Installation
 
-1. Download `ClientManager_Setup.exe`
+1. Download `ClientManager_Setup_v1.2.2.exe`
 2. Run it and follow the wizard (Next → Install → Finish)
-3. Launch **Client Manager** from the Start Menu
+3. Launch **Client Manager** from the Start Menu or Desktop shortcut
+
+> **Upgrading from v1.2.1?** Simply run the new installer — it will upgrade in place and preserve your database.
 
 ---
 
 ## ⚙️ System Requirements
 
 - Windows 10 or Windows 11 (64-bit)
-- ~50 MB free disk space
+- ~55 MB free disk space
 - No internet connection required — fully offline
 
 ---
 
-*Built with Flutter 3 · SQLite · Inno Setup 6*
+*Built with Flutter 3 · SQLite · Inno Setup 6 · GitHub Actions*

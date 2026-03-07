@@ -11,6 +11,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.2] — 2026-03-07
+
+### Added
+- **Admin Logs Dashboard (Tab 5)**: Complete redesign of the Audit Logs tab into a full-width, scalable admin-only dashboard using `ListView.builder` for smooth performance even with thousands of entries.
+- **Logs Search Bar**: Real-time search across all log fields (username, action type, customer ID, and details text).
+- **Cross-Filter Logs**: Status, Service, and Payment filters now work across both the Πίνακας tab and the Αρχείο (Logs) tab simultaneously, with O(1) map-based client lookups.
+- **GitHub Actions CI/CD Pipeline**: Automated release workflow (`.github/workflows/release.yml`) — push a `v*` tag and GitHub Actions automatically builds the Flutter Windows app, compiles the Inno Setup installer, and creates a GitHub Release with the `.exe` uploaded as an asset.
+- **Dynamic Version Injection**: The CI/CD pipeline reads the version from the Git tag and patches it into `installer.iss` automatically — no manual edits needed.
+
+### Changed
+- **Performance Overhaul**: Replaced O(N×M) log filtering with O(1) map-based lookups. Replaced redundant database search calls with instant local memoized filtering. Filter and search are now near-instant (<1ms) regardless of dataset size.
+- **Memoized Filtering**: Filtering and sorting now computed once and cached in `_cachedFilteredClients` / `_cachedFilteredAuditLogs`; UI reuses the cache without recalculation on every frame.
+- **Local Search**: Client search no longer hits the database on every keystroke — results are filtered in-memory from the already-loaded dataset.
+
+### Fixed
+- **Dropdown Dark Mode Bug**: Filter dropdowns in dark mode had black text on a dark background when the menu was open. Fixed by introducing `selectedItemBuilder` to separate the button label style from the popup menu item style.
+
+---
+
 ## [1.2.1] — 2026-03-06
 
 ### Added

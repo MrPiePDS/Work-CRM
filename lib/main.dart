@@ -35,7 +35,7 @@ void main() async {
       size: Size(440, 460),
       minimumSize: Size(440, 460),
       center: true,
-      title: 'Client Manager v1.1.0a',
+      title: 'Client Manager v1.2.2',
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -58,7 +58,7 @@ class MyApp extends StatelessWidget {
       valueListenable: appThemeNotifier,
       builder: (_, ThemeMode currentMode, __) {
         return MaterialApp(
-          title: 'Client Manager v1.1.0a',
+          title: 'Client Manager v1.2.2',
           debugShowCheckedModeBanner:
               false, // hide the debug ribbon in dev builds
           theme: AppTheme.lightTheme,
