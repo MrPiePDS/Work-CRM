@@ -63,7 +63,7 @@ jobs:
 
       # ── 7. Install Inno Setup 6 ──────────────────────────────────────────
       - name: Install Inno Setup 6
-        run: choco install innosetup --version=6.3.3 -y --no-progress
+        run: choco install innosetup -y --no-progress
         shell: pwsh
 
       # ── 8. Patch version in installer.iss ───────────────────────────────
