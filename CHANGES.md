@@ -11,6 +11,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0] — 2026-03-08
+
+### Added
+- **Unified Self-Hosted Update System (TECH-01 to TECH-05)**: Implemented a robust in-app update mechanism that checks GitHub Releases for new versions without requiring an app store.
+- **VersionService**: High-level service handling GitHub API version comparison, downloading assets via `dio`, and platform-specific installation logic.
+- **Android Auto-Update**: Integrated `ota_update` for seamless background downloading and system-led APK installation.
+- **Windows Silent Update**: Automation for downloading the installer, launching it in detached mode, and closing the app to allow self-overwriting.
+- **Update Settings UI**: Added a new card in the Settings tab with an "Auto-check" switch and a manual "Check Now" button.
+- **Download Progress Dialog**: Real-time progress tracking for updates with a visual percentage indicator.
+- **Enhanced CI/CD Pipeline**: New `.github/workflows/build_and_release.yml` with cross-platform build support (Windows & Android).
+
+### Changed
+- **Settings Tab Layout**: Reorganized settings categories for better accessibility.
+
+---
+
 ## [1.2.2] — 2026-03-07
 
 ### Added

@@ -14,6 +14,7 @@ import '../../data/mock_data.dart';
 import '../widgets/client_form.dart';
 import 'login_screen.dart';
 import '../../main.dart';
+import '../../services/version_service.dart';
 
 /// ─── DashboardScreen ────────────────────────────────────────────────────────
 ///
@@ -49,6 +50,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   String _searchQuery = '';
   String _logsSearchQuery = '';
+
+  // ── Update State ───────────────────────────────────────────────────────────
+  bool _autoCheckUpdates = false;
+  bool _isCheckingForUpdates = false;
+  double _updateProgress = 0.0;
+  final _versionService = VersionService();
 
   // ── Optimization Cache ────────────────────────────────────────────────────
   List<Client> _cachedFilteredClients = [];
@@ -202,7 +209,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _setWindowSize(); // expand window from login size to dashboard size
+    _loadUpdatePreference();
     _refreshClients(); // initial data load
+  }
+
+  Future<void> _loadUpdatePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _autoCheckUpdates =
+          prefs.getBool('autoCheckUpdates') ?? true; // default true
+    });
+    if (_autoCheckUpdates) {
+      _checkForUpdates(silent: true);
+    }
+  }
+
+  Future<void> _checkForUpdates({bool silent = false}) async {
+    if (_isCheckingForUpdates) return;
+    setState(() => _isCheckingForUpdates = true);
+
+    try {
+      final hasUpdate = await _versionService.checkForUpdates();
+      if (!mounted) return;
+
+      if (hasUpdate) {
+        _showUpdateDialog();
+      } else if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Έχετε την τελευταία έκδοση!')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingForUpdates = false);
+      }
+    }
+  }
+
+  void _showUpdateDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Νέα Ενημέρωση Διαθέσιμη'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                      'Μια νέα έκδοση είναι διαθέσιμη. Θέλετε να την εγκαταστήσετε τώρα;'),
+                  if (_updateProgress > 0) ...[
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(value: _updateProgress),
+                    const SizedBox(height: 8),
+                    Text('${(_updateProgress * 100).toInt()}%'),
+                  ],
+                ],
+              ),
+              actions: _updateProgress > 0
+                  ? [] // Hide buttons while downloading
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Αργότερα'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          setDialogState(() => _updateProgress = 0.01);
+                          final navigator = Navigator.of(ctx);
+                          final messenger = ScaffoldMessenger.of(context);
+
+                          final success =
+                              await _versionService.downloadAndInstallUpdate(
+                            (progress, total) {
+                              if (mounted) {
+                                setDialogState(() {
+                                  _updateProgress = progress / total;
+                                });
+                              }
+                            },
+                          );
+                          if (!success && mounted) {
+                            navigator.pop();
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                  content: Text('Αποτυχία ενημέρωσης.')),
+                            );
+                          }
+                        },
+                        child: const Text('Ενημέρωση'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    ).then((_) {
+      if (mounted) setState(() => _updateProgress = 0.0);
+    });
   }
 
   // ── Window Management ──────────────────────────────────────────────────────
@@ -879,6 +985,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.all(16.0),
       children: [
         _buildAppearanceSettings(),
+        _buildUpdateSystemCard(),
         _buildChangePasswordCard(),
         if (_isAdmin) _buildAdminUserManagementCard(),
         if (_isAdmin) _buildDataManagementCard(),
@@ -924,6 +1031,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ── Settings Sub-Cards ─────────────────────────────────────────────────────
+
+  Widget _buildUpdateSystemCard() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ενημερώσεις Εφαρμογής',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Divider(),
+            SwitchListTile(
+              title: const Text('Αυτόματος Έλεγχος'),
+              subtitle:
+                  const Text('Έλεγχος για νέες εκδόσεις κατά την εκκίνηση.'),
+              value: _autoCheckUpdates,
+              secondary: const Icon(LucideIcons.refreshCw),
+              onChanged: (val) async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('autoCheckUpdates', val);
+                setState(() => _autoCheckUpdates = val);
+              },
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.download),
+              title: const Text('Έλεγχος Τώρα'),
+              subtitle: const Text('Χειροκίνητος έλεγχος για ενημερώσεις.'),
+              trailing: _isCheckingForUpdates
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : ElevatedButton(
+                      onPressed: () => _checkForUpdates(silent: false),
+                      child: const Text('Έλεγχος'),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildChangePasswordCard() {
     return Card(

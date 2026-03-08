@@ -1,5 +1,5 @@
-# 🚀 Client Manager v1.2.2 — Release Notes
-**Date:** 07 March 2026
+# 🚀 Client Manager v1.3.0 — Release Notes
+**Date:** 08 March 2026
 
 ---
 
@@ -7,47 +7,53 @@
 
 | File | Description |
 |------|-------------|
-| `ClientManager_Setup_v1.2.2.exe` | Windows installer (self-contained, ~14 MB) |
+| `ClientManager_Setup_v1.3.0.exe` | Windows installer (self-contained, ~15 MB) |
+| `app-release.apk` | Android APK (for manual install or auto-update) |
 
 > Run the installer on any **Windows 10/11** PC — no additional software required.
 
 ---
 
-## ✨ What's New in v1.2.2
+## ✨ What's New in v1.3.0
 
-### 📊 Admin Logs Dashboard (Major Redesign)
-- The "Αρχείο (Logs)" tab is now a full **admin-only dashboard** with a full-width, virtualized table that handles thousands of log entries without any lag.
-- **Search bar**: Filter logs in real-time by username, action type, customer ID, or any text in the details.
-- **Cross-tab filters**: The Status, Service, and Payment filters now apply to logs as well, letting you focus on specific client categories instantly.
+### 🔄 Unified Self-Hosted Update System
+- **Kotatsu-style auto-updates**: The application now checks directly with GitHub Releases to see if a newer version is available.
+- **Cross-Platform Support**: Seamless updates for both **Windows** (via installer execution) and **Android** (via OTA APK installation).
+- **Auto-check on Startup**: A new setting allows the app to silently check for updates every time you open it.
+- **Manual Control**: Don't want auto-checks? Use the new "Έλεγχος Τώρα" button in the Settings tab.
+- **Download Progress**: See real-time download percentage directly in a popup dialog before the update installs.
 
-### ⚡ Performance Overhaul
-- **Near-zero lag on filters**: Filtering and search now happen entirely in memory. No more database calls on every keystroke.
-- **O(1) log lookups**: Log-to-client cross-referencing uses a hash map instead of a full list scan, making the Logs Dashboard instant even with large datasets.
-- **Memoized lists**: Filtered results are cached and only recomputed when something actually changes.
+### 🛠 Deployment & CI/CD
+- **Enhanced Build Pipeline**: A new GitHub Actions workflow now builds both Windows and Android versions automatically on every push to main.
+- **Automated Tag Releases**: Pushing a version tag now creates a draft GitHub Release with all platform assets attached.
 
-### 🐛 Bug Fixes
-- **Dropdown dark mode**: Fixed an issue where filter dropdown menu options showed black text on a dark background, making them invisible.
-
-### 🤖 CI/CD Automation
-- Push a `v*` tag to GitHub and a GitHub Actions workflow automatically builds the release, packages the Inno Setup installer, and publishes a new GitHub Release — no manual steps required.
+### 🐛 Improvements
+- Optimized the Settings tab layout to accommodate new update controls.
+- Improved Android permission handling for side-loading APK updates reliably.
 
 ---
 
 ## 📥 Installation
 
-1. Download `ClientManager_Setup_v1.2.2.exe`
-2. Run it and follow the wizard (Next → Install → Finish)
-3. Launch **Client Manager** from the Start Menu or Desktop shortcut
+### Windows
+1. Download `ClientManager_Setup_v1.3.0.exe`
+2. Run it and follow the wizard.
+3. Launch **Client Manager** from the Start Menu.
 
-> **Upgrading from v1.2.1?** Simply run the new installer — it will upgrade in place and preserve your database.
+### Android
+1. Download `app-release.apk`
+2. Open the file on your device and allow "Install from Unknown Sources" if prompted.
+
+> **Upgrading?** Simply run the new installer or use the in-app "Check for Updates" button to let the app handle it for you!
 
 ---
 
 ## ⚙️ System Requirements
 
-- Windows 10 or Windows 11 (64-bit)
-- ~55 MB free disk space
-- No internet connection required — fully offline
+- **Windows**: 10 or 11 (64-bit)
+- **Android**: 5.0+ (API 21)
+- ~60 MB free disk space
+- Internet connection required ONLY for checking and downloading updates.
 
 ---
 

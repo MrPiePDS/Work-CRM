@@ -2,7 +2,7 @@
 
 > A Flutter desktop CRM application for managing client records, services, and documents. Built for Windows, with SQLite local storage, secure encryption, and a polished dark-mode UI.
 
-![Version](https://img.shields.io/badge/version-1.2.2-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightblue)
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)
 ![License](https://img.shields.io/badge/license-Private-red)
@@ -26,6 +26,7 @@
 | **Theme Support** | System, Light, and Dark mode — preference saved between sessions |
 | **Responsive Window** | 440 × 460 for login, 1200 × 750 for dashboard, with enforced minimum size |
 | **PDF & Excel Export** | Export client table to PDF or Excel from the Πίνακας tab |
+| **In-App Updates** | Self-hosted GitHub-based update system with auto-check on startup (Kotatsu style) |
 | **CI/CD Release** | GitHub Actions automatically builds and publishes a new installer on every `v*` tag push |
 
 ---
