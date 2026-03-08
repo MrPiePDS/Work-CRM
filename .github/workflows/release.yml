@@ -100,10 +100,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Client Manager v${{ env.APP_VERSION }}"
+          name: "Client Manager v${{ env['APP_VERSION'] }}"
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
-          files: dist/ClientManager_Setup_v${{ env.APP_VERSION }}.exe
+          files: dist/ClientManager_Setup_v${{ env['APP_VERSION'] }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
