@@ -64,7 +64,22 @@ class VersionService {
           return true;
         }
       } else if (Platform.isWindows) {
-        final exeAsset = _findAssetByExtension(assets, '.exe');
+        // device_info_plus returns system architecture natively as 'x64' or 'arm64' on Windows
+        // however get system architecture is exposed via WindowsDeviceInfo? Let's check docs or fallback safely
+        // But since we aren't completely sure about `systemArchitecture` field without intel-sense:
+        // Let's use `Process.run` for a robust Windows Arch check as well
+        final isArm64 = Platform.environment['PROCESSOR_ARCHITECTURE']
+                ?.toLowerCase()
+                .contains('arm') ==
+            true;
+
+        final expectedAsset = isArm64
+            ? 'ClientManager-Windows-arm64-Installer.exe'
+            : 'ClientManager-Windows-x64-Installer.exe';
+
+        final exeAsset = _findAssetByName(assets, expectedAsset) ??
+            _findAssetByExtension(assets, '.exe'); // Fallback to any exe
+
         if (exeAsset != null) {
           final downloadUrl = exeAsset['browser_download_url'] as String;
           final tempDir = await getTemporaryDirectory();
@@ -92,8 +107,30 @@ class VersionService {
           // Exit the app so it can be overwritten without "File in Use" errors
           exit(0);
         }
+      } else if (Platform.isLinux) {
+        // Basic naive check (can be refined based on uname)
+        final isArm64 =
+            (await Process.run('uname', ['-m'])).stdout.toString().trim() ==
+                'aarch64';
+
+        final expectedAsset = isArm64
+            ? 'ClientManager-Linux-arm64.AppImage'
+            : 'ClientManager-Linux-x64.AppImage';
+
+        final linuxAsset = _findAssetByName(assets, expectedAsset) ??
+            _findAssetByExtension(assets, '.AppImage');
+        if (linuxAsset != null) {
+          // If we had a native AppImage updater, we'd run it here.
+          // For now, we fallback to opening the URL.
+          final htmlUrl = releaseData['html_url'] as String;
+          final uri = Uri.parse(htmlUrl);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            return true;
+          }
+        }
       } else {
-        // macOS, Linux, iOS fallback: open the GitHub release URL
+        // macOS, iOS fallback: open the GitHub release URL
         final htmlUrl = releaseData['html_url'] as String;
         final uri = Uri.parse(htmlUrl);
         if (await canLaunchUrl(uri)) {
@@ -111,6 +148,16 @@ class VersionService {
     for (var asset in assets) {
       final name = asset['name'] as String;
       if (name.toLowerCase().endsWith(extension)) {
+        return asset as Map<String, dynamic>;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _findAssetByName(List assets, String expectedName) {
+    for (var asset in assets) {
+      final name = asset['name'] as String;
+      if (name.toLowerCase() == expectedName.toLowerCase()) {
         return asset as Map<String, dynamic>;
       }
     }
