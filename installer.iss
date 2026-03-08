@@ -5,7 +5,7 @@
 ; ─────────────────────────────────────────────────────────────────────────────
 
 #define AppName      "Client Manager"
-#define AppVersion   "1.3.0"
+#define AppVersion   "1.3.2"
 #define AppPublisher "Mr.Pie"
 #define AppExeName   "crm_flutter.exe"
 #define AppBuildDir  "build\windows\x64\runner\Release"

@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.2] — 2026-03-08
+
+### Changed
+- **Android Auto-Update Compatibility**: The `ota_update` dependency was incompatible with modern Android gradle and coreLibraryDesugaring, causing repeated APK compilation failures. Replaced standard Android APK OTA execution with a direct browser fallback via `url_launcher` identically to iOS/Linux.
+- **Dependencies Versioning**: Incremented `pubspec.yaml` to `1.3.2+2` and `installer.iss` to `1.3.2` to trigger a clean GitHub Action build pipeline.
+
+---
+
 ## [1.3.0] — 2026-03-08
 
 ### Added

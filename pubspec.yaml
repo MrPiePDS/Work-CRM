@@ -1,6 +1,6 @@
 name: crm_flutter
 description: A modern Flutter CRM for client management with offline SQLite and secure storage.
-version: 1.3.0+1
+version: 1.3.2+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
