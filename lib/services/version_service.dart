@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -45,22 +44,10 @@ class VersionService {
       final assets = releaseData['assets'] as List;
 
       if (Platform.isAndroid) {
-        final apkAsset = _findAssetByExtension(assets, '.apk');
-        if (apkAsset != null) {
-          final downloadUrl = apkAsset['browser_download_url'] as String;
-          OtaUpdate()
-              .execute(downloadUrl, destinationFilename: 'app-update.apk')
-              .listen(
-            (OtaEvent event) {
-              if (event.status == OtaStatus.DOWNLOADING) {
-                int progress = int.tryParse(event.value ?? '0') ?? 0;
-                onProgress(progress, 100);
-              } else if (event.status == OtaStatus.INSTALLING) {
-                onProgress(100, 100);
-              }
-            },
-            onError: (err) => debugPrint('OTA Update failed: $err'),
-          );
+        final htmlUrl = releaseData['html_url'] as String;
+        final uri = Uri.parse(htmlUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
           return true;
         }
       } else if (Platform.isWindows) {
