@@ -11,11 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.3.2] — 2026-03-08
+## [1.3.2.a] — 2026-03-08
+
+> **Alpha Release Phase** (Internal testing and verification of the improved cross-platform build pipeline).
+
+### Fixed
+- **Release Assets Pollution**: Cleaned up the GitHub Actions workflow to only upload final installers/packages instead of internal Flutter build files.
+- **Redundancy**: Removed old `release.yml` to prevent duplicate workflow runs on tags.
 
 ### Changed
-- **Android Auto-Update Compatibility**: The `ota_update` dependency was incompatible with modern Android gradle and coreLibraryDesugaring, causing repeated APK compilation failures. Replaced standard Android APK OTA execution with a direct browser fallback via `url_launcher` identically to iOS/Linux.
-- **Dependencies Versioning**: Incremented `pubspec.yaml` to `1.3.2+2` and `installer.iss` to `1.3.2` to trigger a clean GitHub Action build pipeline.
+- **Version Number**: Updated version strings across `pubspec.yaml`, `installer.iss`, and all internal services for consistency during this alpha phase.
 
 ---
 

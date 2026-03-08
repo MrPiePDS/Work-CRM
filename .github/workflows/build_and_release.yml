@@ -19,7 +19,7 @@ jobs:
           - os: ubuntu-latest
             target: linux
             arch: x64
-            artifact: build/linux/x64/release/bundle
+            artifact: ClientManager-Linux-x64.tar.gz
             asset_name: ClientManager-Linux-x64.tar.gz
 
           # ── macOS Universal ────────────────────────────────────────────────
@@ -123,9 +123,6 @@ jobs:
         run: |
           cd build/linux/x64/release/
           tar -czf ../../../../ClientManager-Linux-x64.tar.gz bundle/
-          cd ../../../../
-          mkdir -p build/linux/x64/release/bundle/  # ensure dir exists for upload
-          mv ClientManager-Linux-x64.tar.gz build/linux/x64/release/bundle/ClientManager-Linux-x64.tar.gz
 
       # ═══════════════════════════════════════════════════════════════════════
       # macOS Universal
@@ -226,11 +223,17 @@ jobs:
           Write-Host "Windows ARM64 stub created (full cross-compilation support pending)"
 
       # ── Artifact Upload ──────────────────────────────────────────────────
+      - name: Rename and Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p dist_final
+          cp "${{ matrix.artifact }}" "dist_final/${{ matrix.asset_name }}"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: ${{ matrix.artifact }}
+          path: dist_final/${{ matrix.asset_name }}
           if-no-files-found: error
 
   # ═══════════════════════════════════════════════════════════════════════════
@@ -244,20 +247,24 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: all_artifacts
+          merge-multiple: true
 
       - name: List artifacts (debug)
-        run: ls -R artifacts
+        run: ls -lh all_artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
-          draft: true
-          prerelease: false
+          files: all_artifacts/*
+          draft: false
+          prerelease: true
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
