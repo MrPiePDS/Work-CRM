@@ -539,7 +539,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(
+              MediaQuery.of(context).size.width < 600 ? 8.0 : 16.0),
           child: Row(
             children: [
               Expanded(

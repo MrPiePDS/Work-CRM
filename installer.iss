@@ -40,13 +40,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [Files]
 ; Copy the entire Release folder contents
 Source: "{#AppBuildDir}\{#AppExeName}";          DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppBuildDir}\flutter_windows.dll";     DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppBuildDir}\sqlite3.dll";             DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppBuildDir}\pdfium.dll";              DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppBuildDir}\printing_plugin.dll";     DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppBuildDir}\screen_retriever_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppBuildDir}\window_manager_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppBuildDir}\file_picker_windows.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#AppBuildDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 ; Flutter assets (fonts, shaders, etc.)
 Source: "{#AppBuildDir}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 

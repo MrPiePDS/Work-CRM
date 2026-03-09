@@ -431,7 +431,8 @@ class _ClientFormState extends State<ClientForm> {
     return Container(
       width: widget.isDialog ? 1100 : double.infinity,
       height: widget.isDialog ? 780 : null,
-      padding: const EdgeInsets.all(24),
+      padding:
+          EdgeInsets.all(MediaQuery.of(context).size.width < 600 ? 12 : 24),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(
